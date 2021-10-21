@@ -1,0 +1,14 @@
+dependencies:
+  - name: d3
+    version: 5.7.0
+    src: htmlwidgets/lib/d3
+    script: d3-5.15.0.min.js
+  - name: d3-regression
+    version: 1.3.4
+    src: htmlwidgets/lib/d3-regression
+    script: d3-regression.min.js
+  - name: scatterPlotMatrix
+    version: 0.1
+    src: htmlwidgets/lib/scatterPlotMatrix
+    script: spm-msp.js
+    stylesheet: scatterPlotMatrix.css
