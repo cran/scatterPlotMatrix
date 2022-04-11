@@ -193,6 +193,10 @@
   display: none;
 }
 
+.mspDiv .hlPoint {
+  stroke: black;
+}
+
 .mspDiv .mspTooltip {
   display: none;
   position: absolute;
@@ -224,6 +228,10 @@
   padding-right: 1em;
 }
 
+.mspDiv .mspTooltip .axisName {
+  font-weight: bold;
+}
+
 .mspDiv .DistribRepSelect,
 .mspDiv .mouseModeSelect {
   margin-left: 0.5em;
@@ -231,9 +239,7 @@
 
 .mspDiv .distribGroup path,
 .mspDiv .violinGroup path {
-  stroke: rgb(92, 92, 92);
-  stroke-width: 1;
-  stroke-linejoin: round;
+  stroke: none;
 }
 
 .mspDiv .regressionPlots path {
@@ -256,19 +262,9 @@
     opacity: 0.8;
 }
 
-.mspDiv .ver .uncut path,
-.mspDiv .ver .uncut rect {
-    opacity: 0.2;
-}
-
-.mspDiv .hor .uncut path,
-.mspDiv .hor .uncut rect {
-    opacity: 0.3;
-}
-
 .mspDiv .jitterZone {
   stroke: black;
-  fill: #ccc !important;
+  fill: #ccc;
   opacity: 0.2;
 }
 
@@ -286,11 +282,6 @@
 
 .mspDiv .brushDim .overlay {
   cursor : pointer
-}
-
-.mspDiv canvas {
-  position: absolute;
-  pointer-events: none;
 }
 
 .mspDiv .chainGroup path {

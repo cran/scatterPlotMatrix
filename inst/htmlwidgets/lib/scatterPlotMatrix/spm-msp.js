@@ -7,6 +7,7 @@ var spm;
             this.xOriented = false;
             this.dimIndexScale = d3.scalePoint();
             this.dimIndexScaleInvertFn = d3.scaleQuantize();
+            this.inSelectionDrag = false;
             this.scatterPlotMatrix = scatterPlotMatrix;
             this.xOriented = xOriented;
             this.sliderClass = this.xOriented ? "xSlider" : "ySlider";
@@ -53,8 +54,8 @@ var spm;
                 thisBS.scatterPlotMatrix.brushSlidersLinked = !thisBS.scatterPlotMatrix.brushSlidersLinked;
                 chainGroup.select("path")
                     .attr("transform", `translate(0, ${thisBS.scatterPlotMatrix.brushSlidersLinked ? 0 : -2})`);
-                const begin = thisBS.scatterPlotMatrix.xVisibleDimIndex0;
-                const end = thisBS.scatterPlotMatrix.xVisibleDimIndex0 + thisBS.scatterPlotMatrix.visibleDimsCount - 1;
+                const begin = thisBS.scatterPlotMatrix.xStartingDimIndex;
+                const end = thisBS.scatterPlotMatrix.xStartingDimIndex + thisBS.scatterPlotMatrix.visibleDimCount - 1;
                 thisBS.scatterPlotMatrix.updateVisibleDimensions(begin, end, thisBS.xOriented);
                 thisBS.adjustOtherBrushSelection();
             });
@@ -79,7 +80,7 @@ var spm;
         }
         centerBrush(indexCenter, moveBrush) {
             const spData = this.scatterPlotMatrix.spData;
-            const sizeDimVisible = this.scatterPlotMatrix.visibleDimsCount;
+            const sizeDimVisible = this.scatterPlotMatrix.visibleDimCount;
             let sizeLeft = Math.round((sizeDimVisible - 1) / 2.0);
             let sizeRight = sizeDimVisible - 1 - sizeLeft;
             if (indexCenter - sizeLeft < 0) {
@@ -92,8 +93,8 @@ var spm;
             }
             const begin = indexCenter - sizeLeft;
             const end = indexCenter + sizeRight;
-            if (begin !== this.visibleDimIndex0() ||
-                end !== this.visibleDimIndex0() + this.scatterPlotMatrix.visibleDimsCount - 1) {
+            if (begin !== this.startingDimIndex() ||
+                end !== this.startingDimIndex() + this.scatterPlotMatrix.visibleDimCount - 1) {
                 this.scatterPlotMatrix.updateVisibleDimensions(begin, end, this.xOriented);
                 d3.select(this.scatterPlotMatrix.bindto + " .mspTooltip").style("display", "none");
             }
@@ -144,14 +145,31 @@ var spm;
             d3.select(`${this.scatterPlotMatrix.bindto} .${this.sliderClass} .locatorLine`).style("display", "none");
             d3.select(this.scatterPlotMatrix.bindto + " .mspTooltip").style("display", "none");
         }
-        // eslint-disable-next-line max-lines-per-function
         createBrush() {
             const thisBS = this;
-            let inSelectionDrag;
+            this.inSelectionDrag = false;
             d3.select(`${this.scatterPlotMatrix.bindto} .${this.sliderClass}`).append("g")
                 .attr("class", "brushDim")
-                .call(this.buildBrushBehavior()
+                // Call 'd3.brushX/Y()' to create the SVG elements necessary to display the brush selection and to receive input events for interaction
+                .call(this.brushBehavior())
+                // Listen mouve events of 'overlay' group to center brush (if clicked) or show a tooltip
+                .call(g => g.select(".overlay")
+                // @ts-ignore
+                .on("mousedown touchstart", function () { thisBS.mouseDown(d3.mouse(this)); })
+                // @ts-ignore
+                .on("mousemove", function () { thisBS.mouseMove(d3.mouse(this)); })
+                // @ts-ignore
+                .on("mouseout", function () { thisBS.mouseExit(d3.mouse(this)); }))
+                // Listen mouve events of 'selection' group to update 'drag' flag
+                .call(g => g.select(".selection")
+                .on("mousedown", function () { thisBS.inSelectionDrag = true; })
+                .on("mouseup", function () { thisBS.inSelectionDrag = false; }));
+        }
+        brushBehavior() {
+            const thisBS = this;
+            return this.buildBrushBehavior()
                 .handleSize(4)
+                // Set brushable area
                 .extent(this.xOriented
                 ? [
                     [0, -10],
@@ -161,9 +179,11 @@ var spm;
                     [-10, 0],
                     [10, thisBS.scatterPlotMatrix.height]
                 ])
+                // When the brush moves (such as on mousemove), brush is dragged or a brush bound is moved
                 .on("brush", function () {
                 const selection = d3.event.selection;
-                if (inSelectionDrag) {
+                if (thisBS.inSelectionDrag) {
+                    // if brush is dragged, use 'centerBrush' to keep unchanged the number of selected columns
                     const brushCenter = (selection[0] + selection[1]) / 2.0;
                     const centerIndex = thisBS.dimIndexScaleInvertFn(brushCenter);
                     if (centerIndex) {
@@ -173,51 +193,42 @@ var spm;
                 else {
                     const begin = thisBS.dimIndexScaleInvertFn(selection[0]);
                     const end = thisBS.dimIndexScaleInvertFn(selection[1]);
-                    if (begin !== thisBS.visibleDimIndex0() ||
-                        end !== thisBS.visibleDimIndex0() + thisBS.scatterPlotMatrix.visibleDimsCount - 1) {
+                    if (begin !== thisBS.startingDimIndex() ||
+                        end !== thisBS.startingDimIndex() + thisBS.scatterPlotMatrix.visibleDimCount - 1) {
                         thisBS.scatterPlotMatrix.updateVisibleDimensions(begin, end, thisBS.xOriented);
                     }
                 }
                 thisBS.adjustOtherBrushSelection();
             })
+                // At the end of a brush gesture (such as on mouseup), adjust brush selection
                 .on("end", function () {
-                inSelectionDrag = false;
+                thisBS.inSelectionDrag = false;
                 thisBS.adjustBrushSelection();
                 thisBS.adjustOtherBrushSelection();
-            }))
-                .call(g => g.select(".overlay")
-                // @ts-ignore
-                .on("mousedown touchstart", function () { thisBS.mouseDown(d3.mouse(this)); })
-                // @ts-ignore
-                .on("mousemove", function () { thisBS.mouseMove(d3.mouse(this)); })
-                // @ts-ignore
-                .on("mouseout", function () { thisBS.mouseExit(d3.mouse(this)); }))
-                .call(g => g.select(".selection")
-                .on("mousedown", function () { inSelectionDrag = true; })
-                .on("mouseup", function () { inSelectionDrag = false; }));
+            });
         }
         adjustBrushSelection() {
             // Adjust brush selection (to make it corresponds to the limits of the bands associated to each column)
             d3.select(`${this.scatterPlotMatrix.bindto} .${this.sliderClass} .brushDim`).call(this.buildBrushBehavior().move, [
-                this.dimIndexScale(this.visibleDimIndex0()),
-                this.dimIndexScale(this.visibleDimIndex0() + this.scatterPlotMatrix.visibleDimsCount - 1)
+                this.dimIndexScale(this.startingDimIndex()),
+                this.dimIndexScale(this.startingDimIndex() + this.scatterPlotMatrix.visibleDimCount - 1)
             ]);
         }
         adjustOtherBrushSelection() {
             // Adjust selection of the other brush
-            const otherVisibleDimIndex = this.xOriented ? this.scatterPlotMatrix.yVisibleDimIndex0 : this.scatterPlotMatrix.xVisibleDimIndex0;
+            const otherVisibleDimIndex = this.xOriented ? this.scatterPlotMatrix.yStartingDimIndex : this.scatterPlotMatrix.xStartingDimIndex;
             const otherBrushBehavior = this.xOriented ? d3.brushY() : d3.brushX();
             const otherSlideClass = this.xOriented ? "ySlider" : "xSlider";
             d3.select(`${this.scatterPlotMatrix.bindto} .${otherSlideClass} .brushDim`).call(otherBrushBehavior.move, [
-                this.dimIndexScale(this.scatterPlotMatrix.brushSlidersLinked ? this.visibleDimIndex0() : otherVisibleDimIndex),
-                this.dimIndexScale(otherVisibleDimIndex + this.scatterPlotMatrix.visibleDimsCount - 1)
+                this.dimIndexScale(this.scatterPlotMatrix.brushSlidersLinked ? this.startingDimIndex() : otherVisibleDimIndex),
+                this.dimIndexScale(otherVisibleDimIndex + this.scatterPlotMatrix.visibleDimCount - 1)
             ]);
         }
         // private equals(array1: Array<any>, array2: Array<any>) {
         //     return array1.length === array2.length && array1.every((value, index) => value === array2[index]);
         // }
-        visibleDimIndex0() {
-            return this.xOriented ? this.scatterPlotMatrix.xVisibleDimIndex0 : this.scatterPlotMatrix.yVisibleDimIndex0;
+        startingDimIndex() {
+            return this.xOriented ? this.scatterPlotMatrix.xStartingDimIndex : this.scatterPlotMatrix.yStartingDimIndex;
         }
         buildBrushBehavior() {
             return this.xOriented ? d3.brushX() : d3.brushY();
@@ -296,6 +307,8 @@ var spm;
 (function (spm) {
     class CorrPlot {
         constructor(spData, config) {
+            this.xPlot = 0;
+            this.yPlot = 0;
             this.width = 0;
             this.height = 0;
             this.axisVisibility = { xTitle: true, xValues: true, yTitle: true, yValues: true };
@@ -312,6 +325,7 @@ var spm;
             this.categoricalCsId = config.categoricalCsId;
             this.axisVisibility = config.axisVisibility;
             this.repType = config.corrPlotType;
+            this.style = config.style;
             this.catColorScale = spm.SpConst.CATEGORIAL_CS[this.categoricalCsId];
         }
         setXColumn(column) {
@@ -332,11 +346,15 @@ var spm;
         formatZValue(value) {
             return this.zColumn === null ? "No Z axis" : this.zColumn.formatedValue(value);
         }
+        // eslint-disable-next-line max-lines-per-function
         draw(updateType) {
             const thisPlot = this;
-            this.updateZScale();
             const plotSelection = this.plotSelection();
             plotSelection.select(".corrPlotArea").remove();
+            if (this.repType === CorrPlot.EMPTY_REP) {
+                return;
+            }
+            this.updateZScale();
             const areaSelection = plotSelection.append("g")
                 .attr("class", "corrPlotArea")
                 .attr("transform", "translate(0," + CorrPlot.padding.t + ")");
@@ -367,6 +385,17 @@ var spm;
                 this.drawNA(updateType, areaSelection);
                 cpBorder.classed("cpNaBorder", true);
             }
+            // Compute 'xPlot' and 'yPlot' (useful for canvas)
+            const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
+            const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
+            const xParent = (parentBounds === null) ? 0 : parentBounds.x;
+            const yParent = (parentBounds === null) ? 0 : parentBounds.y;
+            const spRectNode = cpBorder.node();
+            const spRectBounds = (spRectNode === null) ? null : spRectNode.getBoundingClientRect();
+            const xSpRect = (spRectBounds === null) ? 0 : spRectBounds.x;
+            const ySpRect = (spRectBounds === null) ? 0 : spRectBounds.y;
+            this.xPlot = xSpRect - xParent;
+            this.yPlot = ySpRect - yParent;
         }
         hlGraph(highlight) {
             const plotSelection = this.plotSelection();
@@ -400,115 +429,175 @@ var spm;
                 .size([this.width - CorrPlot.padding.r, this.height - CorrPlot.padding.t])
                 .padding(2);
             const rootNode = d3.hierarchy(corrValues);
-            rootNode.sum(function (d) {
-                return Math.abs(d.value);
+            rootNode.sum(function (_cv) {
+                return 1;
             });
             packLayout(rootNode);
+            const categoriesCount = (this.zColumn !== null && this.zColumn.categories) ? this.zColumn.categories.length : 0;
+            // Draw circles which represent correlation values (values between 0 and 1)
             areaSelection
-                .selectAll("circle")
+                .selectAll("circle.corrValues")
                 .data(rootNode.descendants())
                 .enter()
+                .filter(node => categoriesCount !== 0 || node.data.clazz !== "Root")
                 .append("circle")
-                .attr("class", d => d.data.clazz)
-                .attr("cx", d => {
+                .style("pointer-events", "none")
+                .attr("class", node => "corrValues " + node.data.clazz)
+                .attr("cx", node => {
                 // @ts-ignore - x property added by 'd3.pack'
-                const cx = d.x;
+                const cx = node.x;
                 if (isNaN(cx)) {
-                    if (d.data.keptCount > 1) {
-                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cx is NaN (data '${d.data.name}' has ${d.data.keptCount} kept values)`);
+                    console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cx is NaN (data '${node.data.label}' has ${node.data.keptCount} kept values)`);
+                    return 0;
+                }
+                return cx;
+            })
+                .attr("cy", node => {
+                // @ts-ignore - x property added by 'd3.pack'
+                const cy = node.y;
+                if (isNaN(cy)) {
+                    console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cy is NaN (data '${node.data.label}' has ${node.data.keptCount} kept values)`);
+                    return 0;
+                }
+                return cy;
+            })
+                .attr("r", node => {
+                // @ts-ignore - r property added by 'd3.pack'
+                const r = node.r * Math.abs(node.data.value);
+                return isFinite(r) ? r : 0;
+            })
+                .attr("stroke", "none")
+                .filter(node => node.data.clazz !== "Root")
+                .attr("fill", function (node) {
+                if (node.data.clazz === "All") {
+                    return thisPlot.style.plotProperties.noCatColor;
+                }
+                return thisPlot.catColorScale(node.data.catIndex);
+            });
+            // Draw circles which represent a value of 1 for correlation values
+            areaSelection
+                .selectAll("circle.cvBorder")
+                .data(rootNode.descendants())
+                .enter()
+                .filter(node => node.data.clazz !== "Root")
+                .append("circle")
+                .attr("class", node => "cvBorder " + node.data.clazz)
+                .attr("cx", node => {
+                // @ts-ignore - x property added by 'd3.pack'
+                const cx = node.x;
+                if (isNaN(cx)) {
+                    if (node.data.keptCount > 1) {
+                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cx is NaN (data '${node.data.label}' has ${node.data.keptCount} kept values)`);
                     }
                     return 0;
                 }
                 return cx;
             })
-                .attr("cy", d => {
+                .attr("cy", node => {
                 // @ts-ignore - x property added by 'd3.pack'
-                const cy = d.y;
+                const cy = node.y;
                 if (isNaN(cy)) {
-                    if (d.data.keptCount > 1) {
-                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cy is NaN (data '${d.data.name}' has ${d.data.keptCount} kept values)`);
+                    if (node.data.keptCount > 1) {
+                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), cy is NaN (data '${node.data.label}' has ${node.data.keptCount} kept values)`);
                     }
                     return 0;
                 }
                 return cy;
             })
-                .attr("r", d => {
+                .attr("r", node => {
                 // @ts-ignore - r property added by 'd3.pack'
-                const r = d.r;
+                const r = node.r;
                 if (isNaN(r)) {
-                    if (d.data.keptCount > 1) {
-                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), r is NaN (data '${d.data.name}' has ${d.data.keptCount} kept values)`);
+                    if (node.data.keptCount > 1) {
+                        console.error(`corrPlot (${thisPlot.col}, ${thisPlot.row}), r is NaN (data '${node.data.label}' has ${node.data.keptCount} kept values)`);
                     }
                     return 0;
                 }
                 return r;
             })
+                .attr("fill", "none")
+                .attr("stroke", categoriesCount ? "black" : "none")
                 .on("mouseover", function (node) {
-                thisPlot.mouseoverCircle(this, node);
+                thisPlot.mouseoverCircle(node);
             })
                 .on("mouseout", function () {
                 thisPlot.mouseout();
-            })
-                .filter(d => d.data.clazz !== "Root" && d.data.clazz !== "Remaining")
-                .attr("fill", function (d) {
-                if (d.data.clazz === "All") {
-                    return "grey";
-                }
-                const catIndex = +d.data.name;
-                return thisPlot.catColorScale(catIndex);
             });
         }
+        // eslint-disable-next-line max-lines-per-function
         drawCorrValues(_updateType, areaSelection) {
             const thisPlot = this;
-            const corrValues = this.corrValues().children.filter(cv => cv.clazz !== "Remaining");
-            const isCategorial = (this.zColumn !== null && this.zColumn.categories);
-            const fontSize = isCategorial
-                ? (this.height / Math.max(8, corrValues.length)) + "px"
-                : (this.height / 5) + "px";
+            const corrValues = this.corrValues().children;
+            const categoriesCount = (this.zColumn !== null && this.zColumn.categories) ? this.zColumn.categories.length : 0;
             const contColorScale = d3.scaleSequential(spm.SpConst.CONTINUOUS_CS[this.corrCsId])
-                .domain([-1, 1]);
-            const text = areaSelection.selectAll("text").data(corrValues).enter()
-                .append("text")
-                .attr("class", "corrNumber")
-                .attr("font-size", fontSize)
-                .attr("dominant-baseline", "middle")
-                .style("fill", cv => { var _a; return (_a = contColorScale(cv.value)) !== null && _a !== void 0 ? _a : spm.SpConst.CONTINUOUS_CS[this.corrCsId](0); })
+                .domain(thisPlot.repType === CorrPlot.TEXT_REP ? [-1, 1] : [0, 1]);
+            const corrGroup = areaSelection.selectAll("g.corrGroup").data(corrValues).enter()
+                .append("g")
+                .attr("class", "corrGroup")
                 .on("mouseover", function (cv) {
-                thisPlot.mouseoverText(this, cv);
+                thisPlot.mouseoverText(cv);
             })
                 .on("mouseout", function () {
                 thisPlot.mouseout();
             });
-            if (isCategorial) {
+            const valueText = corrGroup.append("text")
+                .attr("class", "corrNumber")
+                .style("fill", function (cv) {
+                if (categoriesCount) {
+                    return cv.clazz === "All"
+                        ? thisPlot.style.plotProperties.noCatColor
+                        : thisPlot.catColorScale(cv.catIndex);
+                }
+                else {
+                    const color = contColorScale(thisPlot.repType === CorrPlot.ABS_TEXT_REP
+                        ? Math.abs(cv.value)
+                        : cv.value);
+                    return color !== null && color !== void 0 ? color : spm.SpConst.CONTINUOUS_CS[thisPlot.corrCsId](0);
+                }
+            });
+            if (categoriesCount) {
                 const bandScale = d3.scaleBand()
-                    .domain(d3.range(corrValues.length))
-                    .range([CorrPlot.padding.t, this.height])
-                    .paddingOuter(0.5);
-                text.attr("x", CorrPlot.padding.r)
+                    .domain(d3.range(categoriesCount + 1))
+                    .range([0, this.height - CorrPlot.padding.t])
+                    .paddingInner(0.3)
+                    .paddingOuter(1);
+                corrGroup.append("rect")
+                    .attr("class", "corrCat")
+                    .attr("x", bandScale.bandwidth() / 2)
+                    .attr("y", (_cv, i) => { var _a; return ((_a = bandScale(i)) !== null && _a !== void 0 ? _a : 0); })
+                    .attr("width", bandScale.bandwidth())
+                    .attr("height", bandScale.bandwidth())
+                    .style("fill", cv => cv.clazz === "All"
+                    ? "none"
+                    : thisPlot.catColorScale(cv.catIndex));
+                valueText
+                    .attr("x", bandScale.bandwidth() * 2)
                     .attr("y", (_cv, i) => { var _a; return (_a = bandScale(i)) !== null && _a !== void 0 ? _a : 0; })
-                    .text(cv => `${cv.name}: ${spm.ExpFormat.format(cv.value)}`);
+                    .attr("dy", bandScale.bandwidth() * 0.6)
+                    .attr("font-size", bandScale.bandwidth())
+                    .attr("dominant-baseline", "middle")
+                    .text(cv => `${spm.ExpFormat.format(cv.value)}`);
             }
             else {
-                text.attr("x", (this.width - CorrPlot.padding.r) / 2)
+                valueText
+                    .attr("x", (this.width - CorrPlot.padding.r) / 2)
                     .attr("y", (this.height - CorrPlot.padding.t) / 2)
+                    .attr("font-size", (this.height - CorrPlot.padding.t) / 5 + "px")
                     .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
                     .text(cv => `${spm.ExpFormat.format(cv.value)}`);
             }
         }
-        mouseoverText(svgTextElement, corrValues) {
+        mouseoverText(corrValues) {
             this.spData.dispatch.call(spm.SpData.HL_GRAPH_EVENT, undefined, this);
-            const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
-            const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
-            const xParent = (parentBounds === null) ? 0 : parentBounds.x;
-            const yParent = (parentBounds === null) ? 0 : parentBounds.y;
-            const textBounds = svgTextElement.getBoundingClientRect();
+            const tooltipLocation = this.tooltipLocation();
             d3.select(this.bindto + " .mspTooltip").remove();
             const mspDiv = d3.select(this.bindto + " .mspDiv");
             const tooltip = mspDiv.append("div")
                 .attr("class", "mspTooltip")
                 .style("display", "block")
-                .style("left", (textBounds.x - xParent) + "px")
-                .style("top", (textBounds.y - yParent) + "px");
+                .style("left", tooltipLocation[0] + "px")
+                .style("top", tooltipLocation[1] + "px");
             tooltip.append("div")
                 .attr("class", "title")
                 .html("Correlation Values");
@@ -524,14 +613,23 @@ var spm;
             }
             this.updateXYTooltip();
         }
+        tooltipLocation() {
+            const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
+            const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
+            const xParent = (parentBounds === null) ? 0 : parentBounds.x;
+            const plotGroup = d3.select(this.bindto + " .mspGroup").node();
+            const elementBounds = (plotGroup === null) ? null : plotGroup.getBoundingClientRect();
+            const xRect = (elementBounds === null) ? 0 : elementBounds.x;
+            const wRect = (elementBounds === null) ? 0 : elementBounds.width;
+            return [xRect - xParent + wRect + 5, this.yPlot];
+        }
         drawNA(_updateType, areaSelection) {
             const corrText = "NA";
-            const fontSize = (this.height / 5) + "px";
             areaSelection.append("text")
                 .attr("class", "naCorrNumber")
                 .attr("x", (this.width - CorrPlot.padding.r) / 2)
                 .attr("y", (this.height - CorrPlot.padding.t) / 2)
-                .attr("font-size", fontSize)
+                .attr("font-size", (this.height - CorrPlot.padding.t) / 5 + "px")
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
                 .text(corrText);
@@ -539,7 +637,8 @@ var spm;
         // eslint-disable-next-line max-lines-per-function
         corrValues() {
             const corrValues = {
-                name: "Root",
+                label: "Root",
+                catIndex: NaN,
                 clazz: "Root",
                 children: [],
                 value: NaN,
@@ -549,7 +648,8 @@ var spm;
             // About Pearson correlation for all points
             const corr = CorrPlot.getPearsonCorrelation(this.spData.cutData().map(row => row[this.xColumn.dim]), this.spData.cutData().map(row => row[this.yColumn.dim]));
             corrValues.children.push({
-                name: "All",
+                label: "All",
+                catIndex: NaN,
                 clazz: "All",
                 children: [],
                 value: corr,
@@ -558,7 +658,6 @@ var spm;
             });
             // About Pearson correlation for each category of points
             let corrCount = 1;
-            let corrCumul = Math.abs(corr);
             const zColumn = this.zColumn;
             if (zColumn !== null && zColumn.categories) {
                 const categories = zColumn.categories;
@@ -568,63 +667,41 @@ var spm;
                         return categories[catIndex] === cat;
                     });
                     const catCorr = CorrPlot.getPearsonCorrelation(filteredData.map(row => row[this.xColumn.dim]), filteredData.map(row => row[this.yColumn.dim]));
-                    const catData = this.spData.sampleData.filter(row => {
-                        const catIndex = row[zColumn.dim];
-                        return categories[catIndex] === cat;
-                    });
-                    corrValues.children.push({
-                        name: i.toString(),
-                        clazz: "Cat",
-                        children: [],
-                        value: catCorr,
-                        pointsCount: catData.length,
-                        keptCount: filteredData.length
-                    });
-                    corrCount = corrCount + 1;
-                    corrCumul = corrCumul + Math.abs(catCorr);
+                    if (isFinite(catCorr)) {
+                        const catData = this.spData.sampleData.filter(row => {
+                            const catIndex = row[zColumn.dim];
+                            return categories[catIndex] === cat;
+                        });
+                        corrValues.children.push({
+                            label: (i + 1).toString(),
+                            catIndex: i,
+                            clazz: "Cat",
+                            children: [],
+                            value: catCorr,
+                            pointsCount: catData.length,
+                            keptCount: filteredData.length
+                        });
+                        corrCount = corrCount + 1;
+                    }
                 });
             }
-            // About circle representing total uncorrelation
-            corrValues.children.push({
-                name: "Remaining",
-                clazz: "Remaining",
-                children: [],
-                value: corrCount - corrCumul,
-                pointsCount: NaN,
-                keptCount: NaN
-            });
             return corrValues;
         }
-        static rootNode(node) {
-            let rootNode = node;
-            while (rootNode.parent !== null) {
-                rootNode = rootNode.parent;
-            }
-            return rootNode;
-        }
         // eslint-disable-next-line max-lines-per-function
-        mouseoverCircle(circle, node) {
+        mouseoverCircle(node) {
             this.spData.dispatch.call(spm.SpData.HL_GRAPH_EVENT, undefined, this);
-            const circleSelection = d3.select(circle);
-            const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
-            const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
-            const xParent = (parentBounds === null) ? 0 : parentBounds.x;
-            const yParent = (parentBounds === null) ? 0 : parentBounds.y;
-            const circleBound = circle.getBoundingClientRect();
-            const r = +circleSelection.attr("r");
+            const tooltipLocation = this.tooltipLocation();
             d3.select(this.bindto + " .mspTooltip").remove();
             const mspDiv = d3.select(this.bindto + " .mspDiv");
             const tooltip = mspDiv.append("div")
                 .attr("class", "mspTooltip")
                 .style("display", "block")
-                .style("left", (circleBound.x - xParent + r * Math.sqrt(3) + 10) + "px")
-                .style("top", (circleBound.y - yParent + r * Math.sqrt(3)) + "px");
+                .style("left", tooltipLocation[0] + "px")
+                .style("top", tooltipLocation[1] + "px");
             tooltip.append("div")
                 .attr("class", "title")
                 .html("Correlation Circular Treemap");
             if (typeof node.data === "undefined") {
-                const corrValuesArray = CorrPlot.rootNode(node).descendants().map(childNode => childNode.data);
-                this.updateTooltipWithRootCorrelations(corrValuesArray);
                 return;
             }
             switch (node.data.clazz) {
@@ -634,17 +711,6 @@ var spm;
                 case "Cat":
                     this.updateTooltipWithCatCorrelation(node.data);
                     break;
-                case "Remaining": {
-                    // this.updateTooltipWithRemainingCorrelation(node);
-                    const corrValuesArray = CorrPlot.rootNode(node).descendants().map(childNode => childNode.data);
-                    this.updateTooltipWithRootCorrelations(corrValuesArray);
-                    break;
-                }
-                case "Root": {
-                    const corrValuesArray = CorrPlot.rootNode(node).descendants().map(childNode => childNode.data);
-                    this.updateTooltipWithRootCorrelations(corrValuesArray);
-                    break;
-                }
                 default:
                     break;
             }
@@ -661,66 +727,40 @@ var spm;
         updateTooltipWithAllCorrelation(corrValues) {
             const subTipDiv = d3.select(this.bindto + " .mspTooltip").append("div")
                 .attr("class", "subTipDiv");
-            const color = "grey";
             subTipDiv.append("div")
-                .html(`<span class='swatch' style='background:${color}'>&nbsp;</span> <span class='strongValue'>${spm.ExpFormat.format(corrValues.value)}</span>`);
+                .html(`<span class='swatch' style='background:"none"'>&nbsp;</span> <span class='strongValue'>${spm.ExpFormat.format(corrValues.value)}</span>`);
             const zColumn = this.zColumn;
             if (zColumn !== null && zColumn.categories) {
                 subTipDiv.append("div")
                     .html(`Correlation, whatever the value of ${zColumn.label.replace(/<br>/gi, " ")}`);
             }
             subTipDiv.append("div")
-                .html(`Number of points: ${corrValues.keptCount} (cut points: ${corrValues.pointsCount - corrValues.keptCount})`);
+                .html(`${corrValues.keptCount} sample points (${corrValues.pointsCount - corrValues.keptCount} filtered points)`);
         }
         updateTooltipWithCatCorrelation(corrValues) {
             const zColumn = this.zColumn;
             if (!zColumn || !zColumn.categories) {
-                console.log("'mouseoverCircleCat' called, but Z column is not categorial");
+                console.error("'mouseoverCircleCat' called, but Z column is not categorial");
                 return;
             }
             const thisPlot = this;
             const subTipDiv = d3.select(this.bindto + " .mspTooltip").append("div")
                 .attr("class", "subTipDiv");
-            const category = zColumn.categories[+corrValues.name];
-            const catIndex = +corrValues.name;
-            const color = thisPlot.catColorScale(catIndex);
+            const category = zColumn.categories[corrValues.catIndex];
+            const color = thisPlot.catColorScale(corrValues.catIndex);
             subTipDiv.append("div")
                 .html(`<span class='swatch' style='background:${color}'>&nbsp;</span> <span class='strongValue'>${spm.ExpFormat.format(corrValues.value)}</span>`);
             subTipDiv.append("div")
-                .html(`Correlation when ${zColumn.label.replace(/<br>/gi, " ")} = ${category}`);
+                .html(`Correlation when ${zColumn.labelText()} is: ${CorrPlot.brIze(category)}`);
             subTipDiv.append("div")
-                .html(`Number of points: ${corrValues.keptCount} (cut points: ${corrValues.pointsCount - corrValues.keptCount})`);
+                .html(`${corrValues.keptCount} sample points (${corrValues.pointsCount - corrValues.keptCount} filtered points)`);
         }
-        // private updateTooltipWithRemainingCorrelation(corrValues: CorrValues) {
-        //     const tooltip = d3.select(this.bindto + " .mspTooltip");
-        //     if (this.zColumn.categories) {
-        //         tooltip.append("div")
-        //             .html(`Σ(1 - |correlation|): ${ExpFormat.format(corrValues.value)}`);
-        //     }
-        //     else {
-        //         tooltip.append("div")
-        //             .html(`1 - |correlation|: ${ExpFormat.format(corrValues.value)}`);
-        //     }
-        // }
-        updateTooltipWithRootCorrelations(corrValuesArray) {
-            corrValuesArray.forEach(corrValues => {
-                switch (corrValues.clazz) {
-                    case "All": {
-                        this.updateTooltipWithAllCorrelation(corrValues);
-                        break;
-                    }
-                    case "Cat": {
-                        this.updateTooltipWithCatCorrelation(corrValues);
-                        break;
-                    }
-                    // case "Remaining": {
-                    //     this.updateTooltipWithRemainingCorrelation(corrValues);
-                    //     break;
-                    // }
-                    default:
-                        break;
-                }
-            });
+        static brIze(category) {
+            const splittedCategory = category.toString().split(", ");
+            if (splittedCategory.length > 1) {
+                return "<br>" + splittedCategory.join(",<br>") + "<br>";
+            }
+            return splittedCategory[0];
         }
         mouseout() {
             d3.select(this.bindto + " .mspTooltip").style("display", "none");
@@ -764,11 +804,13 @@ var spm;
             const step3 = (shortestArrayLength * sum_y2) - (sum_y * sum_y);
             const step4 = Math.sqrt(step2 * step3);
             const answer = step1 / step4;
-            return answer;
+            return isFinite(answer) ? answer : NaN;
         }
     }
+    CorrPlot.EMPTY_REP = "Empty";
     CorrPlot.CIRCLES_REP = "Circles";
     CorrPlot.TEXT_REP = "Text";
+    CorrPlot.ABS_TEXT_REP = "AbsText";
     CorrPlot.padding = { r: 10, t: 10 };
     spm.CorrPlot = CorrPlot;
 })(spm || (spm = {}));
@@ -777,7 +819,9 @@ var spm;
 (function (spm) {
     class DiagPlot {
         constructor(spData, config) {
-            this.hidth = 0;
+            this.xPlot = 0;
+            this.yPlot = 0;
+            this.width = 0;
             this.height = 0;
             this.xScale = d3.scaleLinear();
             this.axisVisibility = { xTitle: true, xValues: true, yTitle: true, yValues: true };
@@ -786,7 +830,6 @@ var spm;
             this.yScale = d3.scaleLinear();
             this.yAxis = d3.axisLeft(this.yScale)
                 .tickFormat(spm.ExpFormat.format);
-            this.zScale = d3.scaleLinear();
             this.brush = null;
             this.dblClickTimeout = null;
             this.distribPlot = null;
@@ -804,6 +847,7 @@ var spm;
             this.axisVisibility = config.axisVisibility;
             this.contColorScale = d3.scaleSequential(spm.SpConst.CONTINUOUS_CS[this.continuousCsId]);
             this.catColorScale = spm.SpConst.CATEGORIAL_CS[this.categoricalCsId];
+            this.style = config.style;
         }
         setXColumn(column) {
             this.xColumn = column;
@@ -819,12 +863,14 @@ var spm;
             return this.zColumn === null ? "No Z axis" : this.zColumn.formatedValue(value);
         }
         draw(updateType) {
-            this.updateXScale();
-            this.updateZScale();
+            this.xScale.range([0, this.width - spm.ScatterPlot.padding.r]);
+            this.yScale.range([this.height, spm.ScatterPlot.padding.t]);
+            this.updateColorScales();
             const plotSelection = this.plotSelection();
-            this.drawDistribPlots(updateType, plotSelection);
-            this.updateYScale();
             this.drawSpRect(updateType, plotSelection);
+            this.drawDistribPlots(updateType, plotSelection);
+            this.updateXScaleDomain();
+            this.updateYScaleDomain();
             this.drawXAxis(updateType, plotSelection);
             this.drawYAxis(updateType, plotSelection);
             this.drawBrush(updateType, plotSelection);
@@ -834,13 +880,24 @@ var spm;
                 // Add a rect to allow highligthing
                 const xScaleRange = this.xScale.range();
                 const yScaleRange = this.yScale.range();
-                plotSelection.select(".spArea")
+                const spRect = plotSelection.select(".spArea")
                     .append("rect")
                     .attr("class", "spRect")
                     .attr("x", xScaleRange[0])
                     .attr("y", yScaleRange[1])
                     .attr("width", xScaleRange[1] - xScaleRange[0])
                     .attr("height", yScaleRange[0] - yScaleRange[1]);
+                // Compute 'xPlot' and 'yPlot' (useful for canvas)
+                const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
+                const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
+                const xParent = (parentBounds === null) ? 0 : parentBounds.x;
+                const yParent = (parentBounds === null) ? 0 : parentBounds.y;
+                const spRectNode = spRect.node();
+                const spRectBounds = (spRectNode === null) ? null : spRectNode.getBoundingClientRect();
+                const xSpRect = (spRectBounds === null) ? 0 : spRectBounds.x;
+                const ySpRect = (spRectBounds === null) ? 0 : spRectBounds.y;
+                this.xPlot = xSpRect - xParent;
+                this.yPlot = ySpRect - yParent;
             }
         }
         hlGraph(highlight) {
@@ -858,59 +915,54 @@ var spm;
                     orientation: spm.DistributionPlot.HOR,
                     mouseMode: this.mouseMode,
                     categoricalCsId: this.categoricalCsId,
-                    distribType: this.distribType
-                });
+                    distribType: this.distribType,
+                    style: this.style
+                }, this.index, this.xPlot, this.yPlot);
                 this.distribPlot.generate(distribGroup, "#tile-clip");
             }
             if (updateType & (DiagPlot.INIT | DiagPlot.SHAPE | DiagPlot.RANGE | DiagPlot.DOMAIN | DiagPlot.Z_AXIS)) {
-                const xDistribPlotRange = [this.height, DiagPlot.padding.t];
                 this.distribPlot
                     .valuesScaleRange(this.xScale.range())
                     .computePlot(this.zColumn)
-                    .distribScaleRange(xDistribPlotRange);
+                    .distribScaleRange(this.yScale.range());
             }
             if (updateType & (DiagPlot.INIT | DiagPlot.PALETTE | DiagPlot.Z_AXIS)) {
                 this.distribPlot.colorScale(this.catColorScale);
             }
             this.distribPlot.update(updateType, distribGroup);
         }
-        updateXScale() {
+        updateXScaleDomain() {
             this.xScale
-                .range([0, this.hidth - DiagPlot.padding.r])
+                .range([0, this.width - spm.ScatterPlot.padding.r])
                 .domain(this.xColumn.domain());
             if (this.xColumn.categories === null) {
                 this.xScale.nice();
             }
             this.xAxis.scale(this.xScale)
                 .ticks(this.xColumn.axisTicks())
-                .tickSize(-this.height + DiagPlot.padding.t);
+                .tickSize(-this.height + spm.ScatterPlot.padding.t);
         }
-        updateYScale() {
+        updateYScaleDomain() {
             if (this.distribPlot === null) {
-                console.error("updateYScale, 'distribPlot' is null");
+                console.error("updateYScaleDomain, 'distribPlot' is null");
             }
             else {
                 this.yScale
-                    .range([this.height, DiagPlot.padding.t])
                     .domain(this.distribPlot.useHistogramRep()
                     ? this.distribPlot.mainDistrib.cutHistoScale.domain()
                     : this.distribPlot.mainDistrib.cutDensityScale.domain())
                     .nice();
                 this.yAxis.scale(this.yScale)
                     .ticks(5)
-                    .tickSize(-this.hidth + DiagPlot.padding.r);
+                    .tickSize(-this.width + spm.ScatterPlot.padding.r);
             }
         }
-        updateZScale() {
+        updateColorScales() {
             const zColumn = this.zColumn;
             if (zColumn === null) {
                 return;
             }
-            this.zScale
-                .range([this.height - DiagPlot.padding.t, 0])
-                .domain(zColumn.domain());
             if (zColumn.categories === null) {
-                this.zScale.nice();
                 const [zMin, zMax] = zColumn.domain();
                 this.contColorScale = d3.scaleSequential(spm.SpConst.CONTINUOUS_CS[this.continuousCsId])
                     .domain([zMin, zMax]);
@@ -929,7 +981,7 @@ var spm;
                         .attr("class", "x axis")
                         .attr("transform", "translate(0," + this.height + ")");
                     if (this.axisVisibility.xTitle) {
-                        const x = (this.hidth - DiagPlot.padding.r) / 2;
+                        const x = (this.width - spm.ScatterPlot.padding.r) / 2;
                         const y = this.height + DiagPlot.margin.b / 2;
                         axesGroup.append("text")
                             .attr("class", "x scatterlabel")
@@ -957,7 +1009,7 @@ var spm;
                         .attr("class", "y axis");
                     if (this.axisVisibility.xTitle) {
                         const x = -DiagPlot.margin.l * 0.7;
-                        const y = (this.height + DiagPlot.padding.t) / 2;
+                        const y = (this.height + spm.ScatterPlot.padding.t) / 2;
                         axesGroup.append("text")
                             .attr("class", "y scatterlabel")
                             .attr("transform", "translate(" + x + "," + y + ")rotate(270)")
@@ -993,12 +1045,12 @@ var spm;
             const spArea = plotSelection.select(".spArea");
             if (updateType & DiagPlot.INIT || !this.brush) {
                 this.brush = d3.brush()
-                    // .on("start", () => {
-                    // })
+                    // At the end of a brush gesture (such as on mouseup), apply an action according to 'mouseMode'
                     .on("end", () => {
                     const brushZone = d3.event.selection;
                     thisPlot.brushend(brushZone);
                 });
+                // Set brushable area
                 const xExtent = [
                     thisPlot.xScale.range()[0],
                     thisPlot.yScale.range()[1]
@@ -1008,6 +1060,7 @@ var spm;
                     thisPlot.yScale.range()[0]
                 ];
                 this.brush.extent([xExtent, yExtent]);
+                // Create the SVG elements necessary to display the brush selection and to receive input events for interaction
                 spArea.call(this.brush);
             }
         }
@@ -1029,7 +1082,8 @@ var spm;
                 if (brushZone) {
                     this.xScale.domain([brushZone[0][0], brushZone[1][0]].map(this.xScale.invert));
                     this.yScale.domain([brushZone[1][1], brushZone[0][1]].map(this.yScale.invert));
-                    plotSelection.select(".spArea").call(this.brush.move, null);
+                    // Remove the brush selection
+                    plotSelection.select(".spArea").call(this.brush.clear);
                 }
                 else {
                     this.xScale.domain(this.xColumn.domain());
@@ -1070,8 +1124,7 @@ var spm;
             }
             const plotSelection = this.plotSelection();
             this.drawDistribPlots(DiagPlot.SHAPE, plotSelection);
-            this.updateYScale();
-            this.drawXAxis(DiagPlot.SHAPE, plotSelection);
+            this.updateYScaleDomain();
             this.drawYAxis(DiagPlot.SHAPE, plotSelection);
         }
         changeMouseMode(mouseMode) {
@@ -1081,8 +1134,6 @@ var spm;
             }
         }
     }
-    DiagPlot.padding = { r: 10, t: 10 };
-    // static readonly padding = { l: 30, r: 10, b: 30, t: 10 };
     DiagPlot.margin = { l: 60, r: 10, b: 50, t: 5 };
     DiagPlot.cslRight = 30;
     DiagPlot.cslLeft = 10;
@@ -1173,26 +1224,41 @@ var spm;
         }
         computeDensityPlot(data, densityScale) {
             const bandwidth = 0.9 * Math.min(this.plot.column.sd, Math.abs(this.plot.column.p75 - this.plot.column.p25) / 1.34) * Math.pow(data.length, -0.2);
-            const thresholds = this.plot.valuesScale.ticks(40);
+            const domain = this.plot.valuesScale.domain();
+            const thresholds = this.equiDepthThresholds(domain[0], domain[1], true);
             const density = DistributionData.kde(DistributionData.epanechnikov(bandwidth), thresholds, data);
             density.push([thresholds[thresholds.length - 1], 0]);
             density.unshift([thresholds[0], 0]);
             const densityMax = d3.max(density, point => point[1]);
-            densityScale.domain([0, densityMax ? densityMax : 1]);
+            densityScale.domain([0, densityMax ? densityMax * 1.05 : 1]); // +5% to be sure to see top of curves
             return density;
         }
         computeHistogramPlot(data, histoScale) {
-            let thresholds = this.plot.valuesScale.ticks(40);
-            if (this.plot.column.categories) {
-                thresholds = d3.range(spm.SpConst.CAT_RATIO * this.plot.column.categories.length)
-                    .map(t => (t - 0.5) / spm.SpConst.CAT_RATIO);
-            }
+            const domain = this.plot.valuesScale.domain();
+            const thresholds = this.plot.column.categories
+                ? d3.range(spm.SpConst.CAT_RATIO * this.plot.column.categories.length)
+                    .map(t => (t - 0.5) / spm.SpConst.CAT_RATIO)
+                : this.equiDepthThresholds(domain[0], domain[1], false);
             const bins = d3.histogram()
-                .domain(this.plot.valuesScale.domain())
+                .domain(domain)
                 .thresholds(thresholds)(data);
             const binMax = d3.max(bins, bin => bin.length);
             histoScale.domain([0, binMax ? binMax : 1]);
             return bins;
+        }
+        equiDepthThresholds(min, max, includeMax) {
+            const binBounds = [];
+            const depth = (max - min) / this.numbin();
+            for (let j = 0; j < this.numbin(); j++) {
+                binBounds.push(min + j * depth);
+            }
+            if (includeMax) {
+                binBounds.push(max);
+            }
+            return binBounds;
+        }
+        numbin() {
+            return Math.ceil(2.5 * Math.pow(this.plot.spData.sampleData.length, 0.25));
         }
         distribScaleRange(range) {
             this.uncutDensityScale.range(range);
@@ -1217,15 +1283,22 @@ var spm;
 var spm;
 (function (spm) {
     class DistributionPlot {
-        constructor(spData, column, dpConfig) {
+        constructor(spData, column, dpConfig, plotIndex, xPlot, yPlot) {
             this.valuesScale = d3.scaleLinear();
             this.zColumn = null;
+            this.xPlot = 0;
+            this.yPlot = 0;
+            this.plotIndex = 0;
             this.bindto = dpConfig.bindto;
             this.spData = spData;
             this.mouseMode = dpConfig.mouseMode;
             this.distribType = dpConfig.distribType;
             this.column = column;
             this.orientation = dpConfig.orientation;
+            this.style = dpConfig.style;
+            this.plotIndex = plotIndex;
+            this.xPlot = xPlot;
+            this.yPlot = yPlot;
             this.valuesScale.domain(this.column.domain());
             if (this.column.categories === null) {
                 this.valuesScale.nice();
@@ -1240,8 +1313,8 @@ var spm;
             if (clipSelector) {
                 distribPlot.attr("clip-path", "url(" + clipSelector + ")");
             }
-            const cut = distribPlot.append("g").attr("class", "cut");
             const uncut = distribPlot.append("g").attr("class", "uncut");
+            const cut = distribPlot.append("g").attr("class", "cut");
             // About density plots
             cut.append("g").attr("class", "pdfGroup");
             cut.append("g").attr("class", "subPdfGroup");
@@ -1339,7 +1412,7 @@ var spm;
             }
             const densPath = plotGroup.selectAll("path").data(dataList)
                 .join(enter => enter.append("path"), update => update, exit => exit.remove())
-                .attr("fill", (_data, dataIndex) => this.fillCollor(dataIndex, filtering))
+                .attr("fill", (_data, dataIndex) => this.fillColor(dataIndex, filtering))
                 .attr("d", function (data) {
                 let density = filtering & DistributionPlot.CUT_FILTER ? data.cutDensity : data.uncutDensity;
                 if (!density) {
@@ -1376,7 +1449,7 @@ var spm;
             }
             const densPath = plotGroup.selectAll("path").data(dataList)
                 .join(enter => enter.append("path"), update => update, exit => exit.remove())
-                .attr("fill", (_data, dataIndex) => this.fillCollor(dataIndex, filtering))
+                .attr("fill", (_data, dataIndex) => this.fillColor(dataIndex, filtering))
                 .attr("d", function (data) {
                 let density = filtering & DistributionPlot.CUT_FILTER ? data.cutDensity : data.uncutDensity;
                 if (!density) {
@@ -1408,12 +1481,9 @@ var spm;
                     if (thisPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
                         return;
                     }
-                    const fill = d3.color(thisPlot.fillCollor(dataIndex, filtering));
-                    if (fill) {
-                        d3.select(this).attr("fill", fill.darker(3).toString());
-                    }
+                    d3.select(this).attr("fill", thisPlot.fillColor(dataIndex, filtering, 3));
                     thisPlot.pdfDisplay(filtering, dataIndex, false);
-                    const tooltipLocation = thisPlot.tooltipLocation(this);
+                    const tooltipLocation = thisPlot.tooltipLocation();
                     d3.select(thisPlot.bindto + " .mspTooltip").remove();
                     const mspDiv = d3.select(thisPlot.bindto + " .mspDiv");
                     const tooltip = mspDiv.append("div")
@@ -1425,58 +1495,62 @@ var spm;
                         .attr("class", "title")
                         .html("Density Curve");
                     tooltip.append("div")
-                        .html(`<span class="pdfColumn">for</span>: <span class="pdfColumnLabel">${thisPlot.column.labelText()}`);
+                        .html(`<span class="pdfColumn">Marginal distribution for</span>: <span class="pdfColumnLabel">${thisPlot.column.labelText()}`);
                     if (data.violinCatDescription) {
                         const category = (data.violinCatDescription.column.categories)
                             ? data.violinCatDescription.column.categories[data.violinCatDescription.catIndex]
                             : "undefined";
                         const axisName = thisPlot.orientation === DistributionPlot.HOR ? "y axis" : "x axis";
                         tooltip.append("div")
-                            .html(`where ${axisName} ${data.violinCatDescription.column.labelText()} = ${category}`);
+                            .html(`conditional on ${data.violinCatDescription.column.labelText()} = ${category} (${axisName} )`);
                     }
                     if (filtering & spm.RegressionPlot.SUB_FILTER && thisPlot.column !== thisPlot.zColumn) {
                         if (thisPlot.zColumn) {
                             const category = (thisPlot.zColumn.categories)
                                 ? thisPlot.zColumn.categories[dataIndex]
                                 : "undefined";
-                            tooltip.append("div")
-                                .html(`where z axis ${thisPlot.zColumn.labelText()} = ${category}`);
+                            const coloringHtml = `<span class='swatch' style='background:${thisPlot.fillColor(dataIndex, filtering)}'>&nbsp;</span>`;
+                            if (data.violinCatDescription) {
+                                tooltip.append("div")
+                                    .html(`and on ${thisPlot.zColumn.labelText()} = ${DistributionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
+                            }
+                            else {
+                                tooltip.append("div")
+                                    .html(`conditional on ${thisPlot.zColumn.labelText()} = ${DistributionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
+                            }
                         }
                         else {
-                            tooltip.append("div").html("where zaxis undefined = undefined");
+                            tooltip.append("div").html("conditional on undefined = undefined");
                         }
                     }
                     if (filtering & spm.RegressionPlot.CUT_FILTER) {
                         const filteredUncutData = data.filterData(thisPlot.spData.sampleData);
                         const filteredCutData = data.filterData(thisPlot.spData.cutData());
                         tooltip.append("div")
-                            .html(`used points: ${filteredCutData.length} (cut points: ${filteredUncutData.length - filteredCutData.length})`);
+                            .html(`${filteredCutData.length} sample points (filtered points: ${filteredUncutData.length - filteredCutData.length})`);
                     }
                 })
                     .on("mouseout", function (_data, dataIndex) {
-                    if (thisPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
-                        return;
+                    if (thisPlot.mouseMode === spm.SpConst.tooltipMouse.key) {
+                        d3.select(this).attr("fill", thisPlot.fillColor(dataIndex, filtering));
+                        thisPlot.pdfDisplay(filtering, dataIndex, true);
+                        d3.select(thisPlot.bindto + " .mspTooltip").style("display", "none");
                     }
-                    d3.select(this).attr("fill", thisPlot.fillCollor(dataIndex, filtering));
-                    thisPlot.pdfDisplay(filtering, dataIndex, true);
-                    d3.select(thisPlot.bindto + " .mspTooltip").style("display", "none");
                 });
             }
             else {
                 densPath.style("pointer-events", "none");
             }
         }
-        tooltipLocation(path) {
+        tooltipLocation() {
             const mspDivNode = d3.select(this.bindto + " .mspDiv").node();
             const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
             const xParent = (parentBounds === null) ? 0 : parentBounds.x;
-            const yParent = (parentBounds === null) ? 0 : parentBounds.y;
-            const elementBounds = path.getBoundingClientRect();
-            const xRect = elementBounds.x;
-            const yRect = elementBounds.y;
-            const wRect = elementBounds.width;
-            const hRect = elementBounds.height;
-            return [xRect - xParent + wRect, yRect - yParent + hRect];
+            const plotGroup = d3.select(this.bindto + " .mspGroup").node();
+            const elementBounds = (plotGroup === null) ? null : plotGroup.getBoundingClientRect();
+            const xRect = (elementBounds === null) ? 0 : elementBounds.x;
+            const wRect = (elementBounds === null) ? 0 : elementBounds.width;
+            return [xRect - xParent + wRect + 5, this.yPlot];
         }
         pdfDisplay(filtering, dataIndex, display) {
             const mspGroup = d3.select(this.bindto + " .mspGroup");
@@ -1533,7 +1607,7 @@ var spm;
                 const binRect = binsSelection.selectAll("rect")
                     .data(bins).enter()
                     .append("rect")
-                    .attr("fill", thisPlot.fillCollor(dataIndex, filtering))
+                    .attr("fill", thisPlot.fillColor(dataIndex, filtering))
                     .attr("x", function (bin) {
                     if (typeof bin.x0 === "undefined") {
                         console.error("bin.x0 is undefined");
@@ -1599,7 +1673,7 @@ var spm;
                 const binRect = binsSelection.selectAll("rect")
                     .data(bins).enter()
                     .append("rect")
-                    .attr("fill", thisPlot.fillCollor(dataIndex, filtering))
+                    .attr("fill", thisPlot.fillColor(dataIndex, filtering))
                     .attr("y", function (bin) {
                     if (typeof bin.x0 === "undefined" || typeof bin.x1 === "undefined") {
                         console.error("bin.x0 or bin.x1 are undefined");
@@ -1646,13 +1720,10 @@ var spm;
                     if (thisPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
                         return;
                     }
-                    const fill = d3.color(thisPlot.fillCollor(dataIndex, filtering));
-                    if (fill) {
-                        d3.select(this).attr("fill", fill.darker(3).toString());
-                    }
+                    d3.select(this).attr("fill", thisPlot.fillColor(dataIndex, filtering, 3));
                     const x0 = (typeof bin.x0 === "undefined") ? "undefined" : spm.ExpFormat.format(bin.x0);
                     const x1 = (typeof bin.x1 === "undefined") ? "undefined" : spm.ExpFormat.format(bin.x1);
-                    const tooltipLocation = thisPlot.tooltipLocation(this);
+                    const tooltipLocation = thisPlot.tooltipLocation();
                     d3.select(thisPlot.bindto + " .mspTooltip").remove();
                     const mspDiv = d3.select(thisPlot.bindto + " .mspDiv");
                     const tooltip = mspDiv.append("div")
@@ -1662,17 +1733,17 @@ var spm;
                         .style("top", tooltipLocation[1] + "px");
                     tooltip.append("div")
                         .attr("class", "title")
-                        .html("Histogram Bin");
+                        .html("Histogram");
                     if (thisPlot.column.categories) {
                         if (typeof bin.x0 !== "undefined" && typeof bin.x1 !== "undefined") {
                             const cat = thisPlot.column.categories[(bin.x0 + bin.x1) / 2];
                             tooltip.append("div")
-                                .html(`<span class="binColumn">for</span>: <span class="binColumnLabel">${thisPlot.column.labelText()}</span> = <span class="domainValue">${cat}</span>`);
+                                .html(`<span class="binColumn">bin for</span>: <span class="binColumnLabel">${thisPlot.column.labelText()}</span> = <span class="domainValue">${cat}</span>`);
                         }
                     }
                     else {
                         tooltip.append("div")
-                            .html(`<span class="binColumn">for</span>: <span class="binColumnValue">${thisPlot.column.labelText()}</span> ∈ <span class="domainValue">[${x0}, ${x1}[</span> `);
+                            .html(`<span class="binColumn">bin for</span>: <span class="binColumnValue">${thisPlot.column.labelText()}</span> ∈ <span class="domainValue">[${x0}, ${x1}[</span> `);
                     }
                     if (data.violinCatDescription) {
                         const category = (data.violinCatDescription.column.categories)
@@ -1680,15 +1751,22 @@ var spm;
                             : "undefined";
                         const axisName = thisPlot.orientation === DistributionPlot.HOR ? "y axis" : "x axis";
                         tooltip.append("div")
-                            .html(`where ${axisName} ${data.violinCatDescription.column.labelText()} = ${category}`);
+                            .html(`where ${data.violinCatDescription.column.labelText()} = ${category} (${axisName})`);
                     }
                     if (filtering & spm.RegressionPlot.SUB_FILTER && thisPlot.column !== thisPlot.zColumn) {
                         if (thisPlot.zColumn) {
                             const category = (thisPlot.zColumn.categories)
                                 ? thisPlot.zColumn.categories[dataIndex]
                                 : "undefined";
-                            tooltip.append("div")
-                                .html(`where z axis ${thisPlot.zColumn.labelText()} = ${category}`);
+                            const coloringHtml = `<span class='swatch' style='background:${thisPlot.fillColor(dataIndex, filtering)}'>&nbsp;</span>`;
+                            if (data.violinCatDescription) {
+                                tooltip.append("div")
+                                    .html(`and ${thisPlot.zColumn.labelText()} is: ${DistributionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
+                            }
+                            else {
+                                tooltip.append("div")
+                                    .html(`where ${thisPlot.zColumn.labelText()} is: ${DistributionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
+                            }
                         }
                         else {
                             tooltip.append("div").html("where zaxis undefined = undefined");
@@ -1696,25 +1774,38 @@ var spm;
                     }
                     const uncutBins = data.uncutBins;
                     const cutInfo = uncutBins
-                        ? `(cut points: ${uncutBins[binIndex].length - bin.length})`
+                        ? `(${uncutBins[binIndex].length - bin.length} filtered points)`
                         : "";
                     tooltip.append("div")
-                        .html(`<span class="binLength">=> number of points</span>: <span class="binLengthValue">${bin.length}</span> ${cutInfo}`);
+                        .html(`<span class="binLength">=> <span class="binLengthValue">${bin.length}</span> sample points</span> ${cutInfo}`);
                 })
                     .on("mouseout", function () {
-                    if (thisPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
-                        return;
+                    if (thisPlot.mouseMode === spm.SpConst.tooltipMouse.key) {
+                        d3.select(this).attr("fill", thisPlot.fillColor(dataIndex, filtering));
+                        d3.select(thisPlot.bindto + " .mspTooltip").style("display", "none");
                     }
-                    d3.select(this).attr("fill", thisPlot.fillCollor(dataIndex, filtering));
-                    d3.select(thisPlot.bindto + " .mspTooltip").style("display", "none");
                 });
             }
             else {
                 binRect.style("pointer-events", "none");
             }
         }
-        fillCollor(dataIndex, filtering) {
-            return filtering & DistributionPlot.SUB_FILTER ? this.subColorScale(dataIndex) : spm.SpConst.NO_CAT_COLOR;
+        static brIze(category) {
+            const splittedCategory = category.toString().split(", ");
+            if (splittedCategory.length > 1) {
+                return "<br>" + splittedCategory.join(",<br>") + "<br>";
+            }
+            return splittedCategory[0];
+        }
+        fillColor(dataIndex, filtering, k) {
+            if (!(filtering & spm.RegressionPlot.CUT_FILTER)) {
+                return this.style.plotProperties.watermarkColor;
+            }
+            const color = (filtering & spm.RegressionPlot.SUB_FILTER)
+                ? this.subColorScale(dataIndex)
+                : this.style.plotProperties.noCatColor;
+            const d3Color = d3.color(color);
+            return d3Color ? d3Color.darker(k).toString() : color;
         }
         computePlot(zColumn, violinCatDescription) {
             this.zColumn = zColumn;
@@ -1804,6 +1895,155 @@ var spm;
 // eslint-disable-next-line no-unused-vars
 var spm;
 (function (spm) {
+    class MultiBrush {
+        constructor(plot) {
+            // Keep the actual d3-brush functions and their IDs in a list
+            this.brushDefList = [];
+            this.plot = plot;
+            // Add new empty BrushDef
+            this.addNewBrushDef();
+            this.applyDataJoin();
+        }
+        static multiBrushClass(plotIndex) {
+            return "multibrush_plot" + plotIndex;
+        }
+        static brushClass(plotIndex, brushDef) {
+            return "brush" + brushDef.id + "_plot" + plotIndex;
+        }
+        brushClass(brushDef) {
+            return MultiBrush.brushClass(this.plot.index, brushDef);
+        }
+        addNewBrushDef(initialXYCutoff) {
+            const thisMB = this;
+            const tlCorner = [
+                this.plot.xScale.range()[0],
+                this.plot.yScale.range()[1]
+            ];
+            const brCorner = [
+                this.plot.xScale.range()[1],
+                this.plot.yScale.range()[0]
+            ];
+            const brush = d3.brush()
+                .handleSize(4)
+                // Set brushable area
+                .extent([tlCorner, brCorner])
+                // When the brush moves (such as on mousemove), update cutoffs of scatter plots
+                .on("brush", function () { thisMB.updatePlotCutoffs(false); })
+                // At the end of a brush gesture (such as on mouseup), update cutoffs of scatter plots and 'brushDefList'
+                .on("end", function () {
+                thisMB.updatePlotCutoffs(true);
+                thisMB.updateBrushDefList();
+            });
+            const newBrushDef = {
+                id: this.brushDefList.length,
+                brush: brush,
+                initialXYCutoff: initialXYCutoff
+            };
+            this.brushDefList.push(newBrushDef);
+            return newBrushDef;
+        }
+        // eslint-disable-next-line max-lines-per-function
+        applyDataJoin() {
+            const thisMB = this;
+            const brushGroup = d3.select(thisMB.plot.bindto + " ." + MultiBrush.multiBrushClass(this.plot.index))
+                .selectAll(".brush")
+                .data(this.brushDefList, brushDef => brushDef.id.toString());
+            // Set up a new BrushBehavior for each entering Brush
+            brushGroup.enter().insert("g", ".brush")
+                .attr("class", function (brushDef) {
+                return ["brush", thisMB.brushClass(brushDef)].join(" ");
+            })
+                .each(function (brushDef, brushIndex) {
+                d3.select(this).call(brushDef.brush);
+                // if entering Brush has an initialCutoff, modify BrushBehavior selection
+                if (brushDef.initialXYCutoff) {
+                    if (brushDef.initialXYCutoff[0] && brushDef.initialXYCutoff[1]) {
+                        const tlCorner = [
+                            thisMB.plot.xScale(brushDef.initialXYCutoff[0][0]),
+                            thisMB.plot.yScale(brushDef.initialXYCutoff[1][1])
+                        ];
+                        const brCorner = [
+                            thisMB.plot.xScale(brushDef.initialXYCutoff[0][1]),
+                            thisMB.plot.yScale(brushDef.initialXYCutoff[1][0])
+                        ];
+                        d3.select(this).call(d3.brush().move, [tlCorner, brCorner]);
+                    }
+                    else {
+                        console.error(`Plot (${thisMB.plot.xColumn.dim}, ${thisMB.plot.yColumn.dim}), brush ${brushIndex}, unexpected initialXYCutoff: ${brushDef.initialXYCutoff}`);
+                    }
+                }
+            });
+            brushGroup.each(function (brushDef) {
+                d3.select(this)
+                    .selectAll(".overlay")
+                    .style("pointer-events", function () {
+                    return (brushDef.id === thisMB.brushDefList.length - 1
+                        && brushDef.brush !== undefined)
+                        ? "all"
+                        : "none";
+                })
+                    .on("click", function () {
+                    thisMB.removeBrushes();
+                });
+            });
+            brushGroup.exit().remove();
+        }
+        removeBrushes() {
+            const brushSelections = [];
+            this.plot.setContCutoff(brushSelections, true);
+            // Remove all brushes
+            this.brushDefList = [];
+            this.applyDataJoin();
+            // Add new empty BrushDef
+            this.addNewBrushDef();
+            this.applyDataJoin();
+        }
+        initFrom(xyCutoffs) {
+            const thisMB = this;
+            // Remove all Brushes
+            thisMB.brushDefList = [];
+            thisMB.applyDataJoin();
+            if (xyCutoffs !== null) {
+                // Add a new BrushDef for each given cutoffs
+                xyCutoffs.forEach((xyCutoff) => {
+                    thisMB.addNewBrushDef(xyCutoff);
+                    thisMB.applyDataJoin();
+                });
+            }
+            // Add new empty BrushDef
+            thisMB.addNewBrushDef();
+            thisMB.applyDataJoin();
+        }
+        updatePlotCutoffs(end) {
+            const thisMB = this;
+            const brushSelections = [];
+            this.brushDefList.forEach(brushDef => {
+                const brushGroup = d3.select(thisMB.plot.bindto + " ." + this.brushClass(brushDef));
+                const brushSelection = d3.brushSelection(brushGroup.node());
+                if (brushSelection !== null) {
+                    brushSelections.push(brushSelection);
+                }
+            });
+            this.plot.setContCutoff(brushSelections, end);
+        }
+        updateBrushDefList() {
+            this.updatePlotCutoffs(true);
+            // If our latest brush has a selection, that means we need to add a new empty BrushDef
+            const lastBrushDef = this.brushDefList[this.brushDefList.length - 1];
+            const lastBrushGroup = d3.select(this.plot.bindto + " ." + this.brushClass(lastBrushDef));
+            const lastBrushSelection = d3.brushSelection(lastBrushGroup.node());
+            if (lastBrushSelection && lastBrushSelection[0] !== lastBrushSelection[1]) {
+                this.addNewBrushDef();
+            }
+            // Always draw brushes
+            this.applyDataJoin();
+        }
+    }
+    spm.MultiBrush = MultiBrush;
+})(spm || (spm = {}));
+// eslint-disable-next-line no-unused-vars
+var spm;
+(function (spm) {
     class MultipleScatterPlot {
         constructor(id, width, height) {
             this.width = 900;
@@ -1824,6 +2064,7 @@ var spm;
             this.categoricalCsId = spm.SpConst.CATEGORIAL_CS_IDS[0];
             this.dispatch = d3.dispatch(MultipleScatterPlot.PLOT_EVENT);
             this.bindto = "#" + id;
+            this.style = new spm.Style(this.bindto);
             this.setSize(width, height);
             this.visibilityPad = new spm.VisibilityPad(this);
             this.selectionPad = new spm.SelectionPad(this);
@@ -1852,18 +2093,24 @@ var spm;
             if (d3.select(this.bindto).empty()) {
                 throw new Error("'bindto' dom element not found:" + this.bindto);
             }
+            this.style.initWith(config.cssRules, config.plotProperties);
             this.scatterPlotList.splice(0, this.scatterPlotList.length);
             this.initData(config);
             this.buildMainDomElements(config);
-            this.visibilityPad.generate(config.visibilityPadId);
+            this.visibilityPad.generate(config.visibilityPadId, config.visiblePlots);
             this.selectionPad.generate(config.selectionPadId).update();
             this.appendPlotSvg();
             this.appendDistribRepSelect();
-            this.appendAxesSelectors();
+            this.appendContCsSelect();
+            this.appendCatCsSelect();
+            this.appendXAxisSelector();
+            this.appendYAxisSelector();
+            this.appendZAxisSelector();
             this.initLegendVisibilityCB();
             this.initZAxisUsedCB();
             this.appendMouseModeSelect();
             this.initRegressionCB();
+            this.spData.on(spm.SpData.HL_POINT_EVENT, MultipleScatterPlot.prototype.hlPoint.bind(this));
             this.updatePlots(spm.ScatterPlot.INIT);
             this.selectionPad.sendSelectionEvent();
             return this;
@@ -1871,6 +2118,14 @@ var spm;
         on(type, callback) {
             // @ts-ignore
             this.dispatch.on(type, callback);
+        }
+        hlPoint(hlEvent) {
+            if (hlEvent.rowIndex === null) {
+                new spm.PointsPlot(hlEvent.scatterPlot).mouseout();
+            }
+            else {
+                new spm.PointsPlot(hlEvent.scatterPlot).mouseover(this.spData.sampleData[hlEvent.rowIndex], hlEvent.rowIndex, this.scatterPlotList);
+            }
         }
         // eslint-disable-next-line max-lines-per-function
         initData(config) {
@@ -1881,7 +2136,7 @@ var spm;
                 this.continuousCsId = config.continuousCS;
             }
             else {
-                console.log("Unknown continuous color scale: " + config.continuousCS);
+                console.error("Unknown continuous color scale: " + config.continuousCS);
             }
             if (!config.categoricalCS) {
                 this.categoricalCsId = spm.SpConst.CATEGORIAL_CS_IDS[0];
@@ -1890,7 +2145,7 @@ var spm;
                 this.categoricalCsId = config.categoricalCS;
             }
             else {
-                console.log("Unknown categorical color scale: " + config.categoricalCS);
+                console.error("Unknown categorical color scale: " + config.categoricalCS);
             }
             if (!config.distribType) {
                 this.distribType = 2;
@@ -1899,7 +2154,7 @@ var spm;
                 this.distribType = config.distribType;
             }
             else {
-                console.log("Unknown distribType: " + config.distribType);
+                console.error("Unknown distribType: " + config.distribType);
             }
             if (!config.regressionType) {
                 this.regressionType = 0;
@@ -1908,10 +2163,11 @@ var spm;
                 this.regressionType = config.regressionType;
             }
             else {
-                console.log("Unknown regressionType: " + config.regressionType);
+                console.error("Unknown regressionType: " + config.regressionType);
             }
+            this.legendVisibility = typeof config.legendVisibility === "boolean" ? config.legendVisibility : true;
             this.spData = new spm.SpData(config);
-            this.spData.initFromRowFilter(this.scatterPlotList);
+            this.spData.updateCutRowsMask();
             this.spData.on(spm.SpData.ROW_FILTER_EVENT, MultipleScatterPlot.prototype.rowFilterChange.bind(this));
             for (let j = 0; j < MultipleScatterPlot.grid.nRow; j++) {
                 for (let i = 0; i < MultipleScatterPlot.grid.nCol; i++) {
@@ -1921,7 +2177,7 @@ var spm;
             this.initAxes(config);
         }
         initAxes(config) {
-            if (this.checkAxeConfig(config.xAxisDim, "config.xAxisDim")) {
+            if (this.checkAxesConfig(config.xAxisDim, "config.xAxisDim")) {
                 for (let i = 0; i < this.scatterPlotList.length; i++) {
                     if (typeof config.xAxisDim === "string") {
                         this.scatterPlotList[i].setXColumn(this.spData.columns[config.xAxisDim]);
@@ -1931,7 +2187,7 @@ var spm;
                     }
                 }
             }
-            if (this.checkAxeConfig(config.yAxisDim, "config.yAxisDim")) {
+            if (this.checkAxesConfig(config.yAxisDim, "config.yAxisDim")) {
                 for (let i = 0; i < this.scatterPlotList.length; i++) {
                     if (typeof config.yAxisDim === "string") {
                         this.scatterPlotList[i].setYColumn(this.spData.columns[config.yAxisDim]);
@@ -1941,32 +2197,34 @@ var spm;
                     }
                 }
             }
-            if (this.checkAxeConfig(config.zAxisDim, "config.zAxisDim")) {
+            if (this.checkAxesConfig(config.zAxisDim, "config.zAxisDim")) {
                 for (let i = 0; i < this.scatterPlotList.length; i++) {
                     if (typeof config.zAxisDim === "string") {
                         this.scatterPlotList[i].setZColumn(this.spData.columns[config.zAxisDim]);
                     }
                     if (Array.isArray(config.zAxisDim)) {
-                        this.scatterPlotList[i].setZColumn(this.spData.columns[config.zAxisDim[i]]);
+                        const zAxisDim = config.zAxisDim[i];
+                        this.scatterPlotList[i].setZColumn(zAxisDim ? this.spData.columns[zAxisDim] : null);
                     }
                 }
             }
         }
-        checkAxeConfig(configDim, configLabel) {
+        checkAxesConfig(configDim, configLabel) {
             if (typeof configDim === "string" &&
                 typeof this.spData.columns[configDim] === "undefined") {
-                console.log(`Unknown '${configLabel}':${configDim}`);
+                console.error(`Unknown '${configLabel}':${configDim}`);
                 return false;
             }
             if (Array.isArray(configDim)) {
                 if (configDim.length !== 9) {
-                    console.log(`'${configLabel}' is an array but its length is not 9`);
+                    console.error(`'${configLabel}' is an array but its length is not 9`);
                     return false;
                 }
                 for (let i = 0; i < 9; i++) {
-                    if (typeof configDim[i] === "string" &&
-                        typeof this.spData.columns[configDim[i]] === "undefined") {
-                        console.log(`Unknown '${configLabel}[${i}]':${configDim[i]}`);
+                    const axisDim = configDim[i];
+                    if (typeof axisDim === "string" &&
+                        typeof this.spData.columns[axisDim] === "undefined") {
+                        console.error(`Unknown '${configLabel}[${i}]':${axisDim}`);
                         return false;
                     }
                 }
@@ -1974,7 +2232,7 @@ var spm;
             return true;
         }
         rowFilterChange() {
-            this.spData.initFromRowFilter(this.scatterPlotList);
+            this.spData.updateCutRowsMask();
             this.scatterPlotList.forEach(plot => {
                 const plotSelection = plot.plotSelection();
                 plot.drawRegressionPlots(spm.ScatterPlot.DOMAIN, plotSelection);
@@ -1982,7 +2240,7 @@ var spm;
                 plot.drawVerViolinPlots(spm.ScatterPlot.DOMAIN, plotSelection);
                 plot.drawHorViolinPlots(spm.ScatterPlot.DOMAIN, plotSelection);
                 if (plotSelection.size() !== 0) {
-                    plot.drawCanvas(false, plotSelection);
+                    plot.drawCanvas(false);
                 }
             });
         }
@@ -2005,7 +2263,8 @@ var spm;
                     xValues: true,
                     yTitle: true,
                     yValues: true
-                }
+                },
+                style: this.style
             });
             this.scatterPlotList.push(scatterPlot);
         }
@@ -2029,6 +2288,11 @@ var spm;
             optionalPlotsDiv.append("div")
                 .attr("class", "loessDiv")
                 .html(`<input type="checkbox" id="${this.id()}_loess" name="loess"> <label for="${this.id()}_loess">Local Polynomial Regression</label>`);
+            optionalPlotsDiv.append("div")
+                .attr("class", "contCsDiv")
+                .html("Continuous Color Scale: <span class=\"contCsSelect\"></span>");
+            optionalPlotsDiv.append("div")
+                .html("Categorical Color Scale: <span class=\"catCsSelect\"></span>");
             const visibilityDiv = controlDiv.append("div")
                 .attr("class", "visibilityDiv");
             visibilityDiv.append("div")
@@ -2055,6 +2319,9 @@ var spm;
                 .attr("class", "yParamDiv")
                 .html("Y Axis: <span class=\"ParamSelect YAxis\"></span>");
             customDiv.append("div")
+                .attr("class", "zAxisUsedDiv")
+                .html(`<input type="checkbox" id="${this.id()}_zAxisUsed" name="zAxisUsed" checked> <label for="${this.id()}_zAxisUsed">Use Z Axis</label>`);
+            customDiv.append("div")
                 .attr("class", "zParamDiv")
                 .html("Z Axis: <span class=\"ParamSelect ZAxis\"></span>");
             const csDiv = controlDiv.append("div")
@@ -2062,9 +2329,6 @@ var spm;
             csDiv.append("div")
                 .attr("class", "legendVisibilityDiv")
                 .html(`<input type="checkbox" id="${this.id()}_legendVisibility" name="legendVisibility" checked> <label for="${this.id()}_legendVisibility">Display Legend</label>`);
-            csDiv.append("div")
-                .attr("class", "zAxisUsedDiv")
-                .html(`<input type="checkbox" id="${this.id()}_zAxisUsed" name="zAxisUsed" checked> <label for="${this.id()}_zAxisUsed">Use Z Axis</label>`);
             csDiv.append("div")
                 .attr("class", "mouseModeDiv")
                 .html("Mouse mode: <span class=\"mouseModeSelect\"></span>");
@@ -2144,6 +2408,7 @@ var spm;
             mspGroup.selectAll(".cslGroup").style("display", this.legendVisibility ? "block" : "none");
             if (updateType & spm.ScatterPlot.INIT) {
                 this.fixBrush();
+                this.style.applyCssRules();
             }
         }
         xScatterPlot(plot) {
@@ -2162,45 +2427,76 @@ var spm;
         //************************************
         //********** Axes Selectors **********
         //************************************
-        appendAxesSelectors() {
+        appendXAxisSelector() {
             const thisMPlot = this;
-            d3.selectAll(this.bindto + " .ParamSelect").data(MultipleScatterPlot.axesClasses).
-                append("select")
+            const plot = [...this.selectionPad.selectedPlots][0];
+            d3.select(this.bindto + " .ParamSelect.XAxis")
+                .append("select")
                 .on("change", function () {
-                const axisClass = d3.select(this).datum();
-                switch (axisClass) {
-                    case MultipleScatterPlot.axesClasses[0]:
-                        thisMPlot.setXAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
-                        break;
-                    case MultipleScatterPlot.axesClasses[1]:
-                        thisMPlot.setYAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
-                        break;
-                    case MultipleScatterPlot.axesClasses[2]:
-                        thisMPlot.setZAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
-                        break;
-                    default:
-                        break;
-                }
+                thisMPlot.setXAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
             })
                 .selectAll("option")
                 .data(this.spData.dimensions)
                 .enter().append("option")
                 .text(function (d) { return d; })
                 .attr("value", function (d) { return d; });
+            const paramIndex = this.spData.dimensions.indexOf(plot.xColumn.dim);
+            d3.select(this.bindto + " .ParamSelect.XAxis > select")
+                .property("selectedIndex", paramIndex);
+        }
+        appendYAxisSelector() {
+            const thisMPlot = this;
+            const plot = [...this.selectionPad.selectedPlots][0];
+            d3.select(this.bindto + " .ParamSelect.YAxis")
+                .append("select")
+                .on("change", function () {
+                thisMPlot.setYAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
+            })
+                .selectAll("option")
+                .data(this.spData.dimensions)
+                .enter().append("option")
+                .text(function (d) { return d; })
+                .attr("value", function (d) { return d; });
+            const paramIndex = this.spData.dimensions.indexOf(plot.yColumn.dim);
+            d3.select(this.bindto + " .ParamSelect.YAxis > select")
+                .property("selectedIndex", paramIndex);
+        }
+        appendZAxisSelector() {
+            const thisMPlot = this;
+            const plot = [...this.selectionPad.selectedPlots][0];
+            d3.select(this.bindto + " .ParamSelect.ZAxis")
+                .append("select")
+                .on("change", function () {
+                thisMPlot.setZAxis(thisMPlot.spData.dimensions[this.selectedIndex]);
+            })
+                .selectAll("option")
+                .data(this.spData.dimensions)
+                .enter().append("option")
+                .text(function (d) { return d; })
+                .attr("value", function (d) { return d; });
+            if (plot.zColumn !== null) {
+                const paramIndex = this.spData.dimensions.indexOf(plot.zColumn.dim);
+                d3.select(this.bindto + " .ParamSelect.ZAxis > select")
+                    .property("selectedIndex", paramIndex);
+            }
         }
         //********************************************************************
         //********** About "LegendVisibility/ZAxisUsed" check boxes **********
         //********************************************************************
         initLegendVisibilityCB() {
             const thisMPlot = this;
-            d3.select(`#${this.id()}_legendVisibility`).on("change", function () {
+            d3.select(`#${this.id()}_legendVisibility`)
+                .property("checked", this.legendVisibility)
+                .on("change", function () {
                 thisMPlot.legendVisibility = d3.select(this).property("checked");
                 // 'range' is to update when the visibility of color scale legend is changed
                 thisMPlot.updatePlots(spm.ScatterPlot.RANGE);
             });
         }
         initZAxisUsedCB() {
+            const plot = [...this.selectionPad.selectedPlots][0];
             d3.select(`#${this.id()}_zAxisUsed`)
+                .property("checked", plot.zColumn !== null)
                 .on("change", MultipleScatterPlot.prototype.updateZAxisFromGui.bind(this));
         }
         updateZAxisFromGui() {
@@ -2262,45 +2558,72 @@ var spm;
             d3.select(this.bindto + " .distribRepSelect").append("select")
                 .on("change", function () {
                 const rep = spm.SpConst.distribRepList[this.selectedIndex];
-                thisMPlot.distribType = rep.key === spm.SpConst.histogramRep.key ? spm.DistributionPlot.HISTO_REP : spm.DistributionPlot.DENS_REP;
-                thisMPlot.scatterPlotList.forEach(plot => {
-                    plot.distribRepChange(thisMPlot.distribType);
-                });
+                thisMPlot.setDistribType(rep.key === spm.SpConst.histogramRep.key ? spm.DistributionPlot.HISTO_REP : spm.DistributionPlot.DENS_REP);
             })
                 .selectAll("option")
                 .data(spm.SpConst.distribRepList)
                 .enter().append("option")
                 .text(function (d) { return d.label; })
                 .attr("value", function (d) { return d.key; });
-            const histoRep = (this.distribType & spm.DistributionPlot.HISTO_REP) ? spm.SpConst.histogramRep.key : spm.SpConst.densityRep;
+            const histoRep = (this.distribType & spm.DistributionPlot.HISTO_REP) ? spm.SpConst.histogramRep.key : spm.SpConst.densityRep.key;
             const repIndex = spm.SpConst.distribRepList.findIndex(distribRep => distribRep.key === histoRep);
             d3.select(this.bindto + " .distribRepSelect > select")
                 .property("selectedIndex", repIndex);
         }
         initRegressionCB() {
             const thisMPlot = this;
-            d3.select(`#${this.id()}_linearRegr`).on("change", function () {
+            d3.select(`#${this.id()}_linearRegr`)
+                .property("checked", (this.regressionType & spm.RegressionPlot.LINEAR_REP) !== 0)
+                .on("change", function () {
                 if (d3.select(this).property("checked")) {
-                    thisMPlot.regressionType = thisMPlot.regressionType | spm.RegressionPlot.LINEAR_REP;
+                    thisMPlot.setRegressionType(thisMPlot.regressionType | spm.RegressionPlot.LINEAR_REP);
                 }
                 else {
-                    thisMPlot.regressionType = thisMPlot.regressionType ^ spm.RegressionPlot.LINEAR_REP;
+                    thisMPlot.setRegressionType(thisMPlot.regressionType ^ spm.RegressionPlot.LINEAR_REP);
                 }
-                thisMPlot.scatterPlotList.forEach(plot => {
-                    plot.regressionRepChange(thisMPlot.regressionType);
-                });
             });
-            d3.select(`#${this.id()}_loess`).on("change", function () {
+            d3.select(`#${this.id()}_loess`)
+                .property("checked", (this.regressionType & spm.RegressionPlot.LOESS_REP) !== 0)
+                .on("change", function () {
                 if (d3.select(this).property("checked")) {
-                    thisMPlot.regressionType = thisMPlot.regressionType | spm.RegressionPlot.LOESS_REP;
+                    thisMPlot.setRegressionType(thisMPlot.regressionType | spm.RegressionPlot.LOESS_REP);
                 }
                 else {
-                    thisMPlot.regressionType = thisMPlot.regressionType ^ spm.RegressionPlot.LOESS_REP;
+                    thisMPlot.setRegressionType(thisMPlot.regressionType ^ spm.RegressionPlot.LOESS_REP);
                 }
-                thisMPlot.scatterPlotList.forEach(plot => {
-                    plot.regressionRepChange(thisMPlot.regressionType);
-                });
             });
+        }
+        appendContCsSelect() {
+            const thisMPlot = this;
+            d3.select(this.bindto + " .contCsSelect").append("select")
+                .on("change", function () {
+                const contCsKey = spm.SpConst.CONTINUOUS_CS_IDS[this.selectedIndex];
+                thisMPlot.setContinuousColorScale(contCsKey);
+            })
+                .selectAll("option")
+                .data(spm.SpConst.CONTINUOUS_CS_IDS)
+                .enter().append("option")
+                .text(function (d) { return d; })
+                .attr("value", function (d) { return d; });
+            const contCsIndex = spm.SpConst.CONTINUOUS_CS_IDS.indexOf(this.continuousCsId);
+            d3.select(this.bindto + " .contCsSelect > select")
+                .property("selectedIndex", contCsIndex);
+        }
+        appendCatCsSelect() {
+            const thisMPlot = this;
+            d3.select(this.bindto + " .catCsSelect").append("select")
+                .on("change", function () {
+                const catCsKey = spm.SpConst.CATEGORIAL_CS_IDS[this.selectedIndex];
+                thisMPlot.setCategoricalColorScale(catCsKey);
+            })
+                .selectAll("option")
+                .data(spm.SpConst.CATEGORIAL_CS_IDS)
+                .enter().append("option")
+                .text(function (d) { return d; })
+                .attr("value", function (d) { return d; });
+            const catCsIndex = spm.SpConst.CATEGORIAL_CS_IDS.indexOf(this.categoricalCsId);
+            d3.select(this.bindto + " .catCsSelect > select")
+                .property("selectedIndex", catCsIndex);
         }
         //**************************************************
         //********** API (called by R htmlwidget) **********
@@ -2322,7 +2645,7 @@ var spm;
                 });
             }
             else {
-                console.log("Invalid distribution type code: " + distribType);
+                console.error("Invalid distribution type code: " + distribType);
             }
         }
         setRegressionType(regressionType) {
@@ -2333,7 +2656,7 @@ var spm;
                 });
             }
             else {
-                console.log("Invalid regression type code: " + regressionType);
+                console.error("Invalid regression type code: " + regressionType);
             }
         }
         setContinuousColorScale(continuousCsId) {
@@ -2345,7 +2668,7 @@ var spm;
                 this.updatePlots(spm.ScatterPlot.PALETTE);
             }
             else {
-                console.log("Unknown continuous color scale: " + continuousCsId);
+                console.error("Unknown continuous color scale: " + continuousCsId);
             }
         }
         setCategoricalColorScale(categoricalCsId) {
@@ -2357,24 +2680,28 @@ var spm;
                 this.updatePlots(spm.ScatterPlot.PALETTE);
             }
             else {
-                console.log("Unknown categorical color scale: " + categoricalCsId);
+                console.error("Unknown categorical color scale: " + categoricalCsId);
             }
         }
+        setCutoffs(spCutoffsList) {
+            this.spData.setCutoffs(spCutoffsList);
+            this.fixBrush();
+        }
         getPlotConfig() {
-            // TODO: 'dim' for Axes X ,Y and Z are not managed
             const allDimensions = d3.keys(this.spData.sampleData[0]);
             return {
                 data: [],
                 rowLabels: this.spData.rowLabels,
-                controlWidgets: d3.select(this.bindto + " .mspDiv").classed("withWidgets"),
                 categorical: allDimensions.map(dim => this.spData.columns[dim]
                     ? this.spData.columns[dim].categories
                     : null),
                 inputColumns: allDimensions.map(dim => this.spData.columns[dim] && this.spData.columns[dim].ioType === spm.Column.INPUT),
                 keptColumns: allDimensions.map(dim => this.spData.dimensions.includes(dim)),
-                xAxisDim: null,
-                yAxisDim: null,
-                zAxisDim: null,
+                cutoffs: this.spData.getXYCutoffs(),
+                xAxisDim: this.scatterPlotList.map(sp => sp.xColumn.dim),
+                yAxisDim: this.scatterPlotList.map(sp => sp.yColumn.dim),
+                zAxisDim: this.scatterPlotList.map(sp => sp.zColumn ? sp.zColumn.dim : null),
+                visiblePlots: this.scatterPlotList.map(sp => this.visibilityPad.visible(sp)),
                 distribType: this.distribType,
                 regressionType: this.regressionType,
                 columnLabels: allDimensions.map(dim => this.spData.columns[dim]
@@ -2382,8 +2709,12 @@ var spm;
                     : dim),
                 continuousCS: this.continuousCsId,
                 categoricalCS: this.categoricalCsId,
+                legendVisibility: this.legendVisibility,
                 visibilityPadId: "",
-                selectionPadId: ""
+                selectionPadId: "",
+                controlWidgets: d3.select(this.bindto + " .mspDiv").classed("withWidgets"),
+                cssRules: this.style.cssRules,
+                plotProperties: this.style.plotProperties
             };
         }
     }
@@ -2401,32 +2732,73 @@ var spm;
         constructor(scatterPlot) {
             this.scatterPlot = scatterPlot;
         }
-        mouseover(row, i) {
+        // eslint-disable-next-line max-lines-per-function
+        mouseover(row, i, scatterPlotList) {
             if (this.scatterPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
                 return;
             }
             const tooltipTitle = this.scatterPlot.spData.rowLabels
                 ? this.scatterPlot.spData.rowLabels[i]
                 : "Point " + (i + 1);
+            const tooltipLocation = this.tooltipLocation();
             d3.select(this.scatterPlot.bindto + " .mspTooltip").remove();
             const mspDiv = d3.select(this.scatterPlot.bindto + " .mspDiv");
             const tooltip = mspDiv.append("div")
                 .attr("class", "mspTooltip")
                 .style("display", "block")
-                .style("left", (this.scatterPlot.xPlot + this.cx(row, i) + 10) + "px")
-                .style("top", (this.scatterPlot.yPlot + this.cy(row, i) + 10) + "px");
+                .style("left", tooltipLocation[0] + "px")
+                .style("top", tooltipLocation[1] + "px");
             tooltip.append("div")
                 .attr("class", "pointIndex title")
                 .html(tooltipTitle);
-            tooltip.append("div")
-                .html(`<span class="xName">${this.scatterPlot.xColumn.labelText()}</span>: <span class="xValue">${this.scatterPlot.xColumn.formatedRowValue(row)}</span>`);
-            tooltip.append("div")
-                .html(`<span class="yName">${this.scatterPlot.yColumn.labelText()}</span>: <span class="yValue">${this.scatterPlot.yColumn.formatedRowValue(row)}</span>`);
-            if (this.scatterPlot.zColumn !== null) {
-                tooltip.append("div")
-                    .attr("class", "zTooltip")
-                    .html(`<span class="zName">${this.scatterPlot.zColumn.labelText()}</span>: <span class="zValue">${this.scatterPlot.zColumn.formatedRowValue(row)}</span>`);
+            const xDimSet = new Set(scatterPlotList.map(sp => sp.xColumn.dim));
+            const yDimSet = new Set(scatterPlotList.map(sp => sp.yColumn.dim));
+            const dimsToPrint = this.scatterPlot.spData.dimensions.filter(dim => xDimSet.has(dim) || yDimSet.has(dim));
+            if (this.scatterPlot.zColumn !== null && this.scatterPlot.zColumn.categories && !dimsToPrint.includes(this.scatterPlot.zColumn.dim)) {
+                dimsToPrint.push(this.scatterPlot.zColumn.dim);
             }
+            dimsToPrint.forEach(dim => {
+                const column = this.scatterPlot.spData.columns[dim];
+                if (this.scatterPlot.zColumn !== null && this.scatterPlot.zColumn.categories && dim === this.scatterPlot.zColumn.dim) {
+                    const catIndex = row[this.scatterPlot.zColumn.dim];
+                    const category = this.scatterPlot.zColumn.categories[catIndex];
+                    const coloringHtml = `<span class='swatch' style='background:${this.scatterPlot.pointColor(row)}'>&nbsp;</span>`;
+                    const axisName = (dim === this.scatterPlot.xColumn.dim || dim === this.scatterPlot.yColumn.dim)
+                        ? "axisName"
+                        : "zAxisName";
+                    tooltip.append("div")
+                        .html(`<span class="${axisName}">${this.scatterPlot.zColumn.labelText()}</span> ${coloringHtml}&nbsp;: ${PointsPlot.brIze(category)}`);
+                }
+                else if (dim === this.scatterPlot.xColumn.dim) {
+                    tooltip.append("div")
+                        .html(`<span class="axisName">${column.labelText()}</span>: <span class="xValue">${column.formatedRowValue(row)}</span>`);
+                }
+                else if (dim === this.scatterPlot.yColumn.dim) {
+                    tooltip.append("div")
+                        .html(`<span class="axisName">${column.labelText()}</span>: <span class="yValue">${column.formatedRowValue(row)}</span>`);
+                }
+                else {
+                    tooltip.append("div")
+                        .html(`${column.labelText()}: ${column.formatedRowValue(row)}`);
+                }
+            });
+        }
+        static brIze(category) {
+            const splittedCategory = category.toString().split(", ");
+            if (splittedCategory.length > 1) {
+                return "<br>" + splittedCategory.join(",<br>") + "<br>";
+            }
+            return splittedCategory[0];
+        }
+        tooltipLocation() {
+            const mspDivNode = d3.select(this.scatterPlot.bindto + " .mspDiv").node();
+            const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
+            const xParent = (parentBounds === null) ? 0 : parentBounds.x;
+            const plotGroup = d3.select(this.scatterPlot.bindto + " .mspGroup").node();
+            const elementBounds = (plotGroup === null) ? null : plotGroup.getBoundingClientRect();
+            const xRect = (elementBounds === null) ? 0 : elementBounds.x;
+            const wRect = (elementBounds === null) ? 0 : elementBounds.width;
+            return [xRect - xParent + wRect + 5, this.scatterPlot.yPlot];
         }
         mouseout() {
             if (this.scatterPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
@@ -2434,43 +2806,19 @@ var spm;
             }
             d3.select(this.scatterPlot.bindto + " .mspTooltip").style("display", "none");
         }
-        cx(row, i) {
-            const cx = (this.scatterPlot.xColumn.categories === null)
-                ? this.scatterPlot.xScale(row[this.scatterPlot.xColumn.dim])
-                : this.scatterPlot.xScale(row[this.scatterPlot.xColumn.dim] + this.scatterPlot.spData.jitterXValues[i]);
-            return typeof cx === "undefined" ? NaN : cx;
-        }
-        cy(row, i) {
-            const cy = (this.scatterPlot.yColumn.categories === null)
-                ? this.scatterPlot.yScale(row[this.scatterPlot.yColumn.dim])
-                : this.scatterPlot.yScale(row[this.scatterPlot.yColumn.dim] + this.scatterPlot.spData.jitterYValues[i]);
-            return typeof cy === "undefined" ? NaN : cy;
-        }
-        pointColor(row) {
-            if (this.scatterPlot.zColumn !== null) {
-                const pointColor = (this.scatterPlot.zColumn.categories === null)
-                    ? this.scatterPlot.contColorScale(row[this.scatterPlot.zColumn.dim])
-                    : this.scatterPlot.catColorScale(row[this.scatterPlot.zColumn.dim]);
-                if (typeof pointColor !== "undefined") {
-                    return pointColor;
-                }
+        addAlpha(color) {
+            const d3Color = d3.color(color);
+            if (d3Color) {
+                d3Color.opacity = this.scatterPlot.style.plotProperties.point.alpha;
+                return d3Color.toString();
             }
-            return spm.SpConst.LIGHTER_NO_CAT_COLOR;
+            return color;
         }
-        drawCanvas(picking, plotSelection) {
-            if (picking) {
-                this.drawPCanvas();
-            }
-            else {
-                this.drawDCanvas(plotSelection);
-            }
-        }
-        // eslint-disable-next-line max-lines-per-function
-        drawDCanvas(plotSelection) {
-            const canvasSelector = this.scatterPlot.canvasSelector(false);
+        drawCanvas(picking) {
+            const canvasSelector = this.scatterPlot.canvasSelector(picking);
             const canvasNode = d3.select(canvasSelector).node();
             if (!canvasNode) {
-                console.error("canvasNode is null");
+                console.error("canvasNode is null for:", canvasSelector);
                 return;
             }
             const context2d = canvasNode.getContext("2d");
@@ -2483,102 +2831,50 @@ var spm;
             const yScaleRange = this.scatterPlot.yScale.range();
             const xPlot = -xScaleRange[0];
             const yPlot = -yScaleRange[1];
-            context2d.globalAlpha = 0.5;
-            this.scatterPlot.spData.sampleData
-                .forEach(function (row, i) {
-                if (thisPlot.scatterPlot.spData.cutRows[i]) {
-                    return;
-                }
-                const cx = thisPlot.cx(row, i) + xPlot;
-                const cy = thisPlot.cy(row, i) + yPlot;
-                const r = spm.ScatterPlot.pointRadius;
-                context2d.beginPath();
-                context2d.arc(cx, cy, r, 0, 2 * Math.PI, false);
-                context2d.fillStyle = "#ccc";
-                context2d.fill();
-            });
+            // First, draw points which are not selected by brushes
             this.scatterPlot.spData.sampleData
                 .forEach(function (row, i) {
                 if (!thisPlot.scatterPlot.spData.cutRows[i]) {
-                    return;
+                    if (picking) {
+                        thisPlot.drawPickingPoint(row, i, xPlot, yPlot, context2d);
+                    }
+                    else {
+                        thisPlot.drawPoint(row, i, xPlot, yPlot, context2d, true);
+                    }
                 }
-                const cx = thisPlot.cx(row, i) + xPlot;
-                const cy = thisPlot.cy(row, i) + yPlot;
-                const r = spm.ScatterPlot.pointRadius;
-                context2d.beginPath();
-                context2d.arc(cx, cy, r, 0, 2 * Math.PI, false);
-                context2d.fillStyle = thisPlot.pointColor(row);
-                context2d.fill();
             });
-            const selection = this.scatterPlot.plotSelection(plotSelection)
-                .selectAll(".selection");
-            if (!selection.empty() && selection.style("display") !== "none") {
-                const x = +selection.attr("x");
-                const y = +selection.attr("y");
-                const w = +selection.attr("width");
-                const h = +selection.attr("heigth");
-                context2d.beginPath();
-                context2d.rect(x, y, w, h);
-                context2d.fillStyle = "#777";
-                context2d.strokeStyle = "#fff";
-                context2d.fill();
-            }
-            const i = this.scatterPlot.spData.getHlPoint();
-            if (i !== null) {
-                const row = this.scatterPlot.spData.sampleData[i];
-                const cx = thisPlot.cx(row, i) + xPlot;
-                const cy = thisPlot.cy(row, i) + yPlot;
-                const r = 2 * spm.ScatterPlot.pointRadius;
-                context2d.beginPath();
-                context2d.arc(cx, cy, r, 0, 2 * Math.PI, false);
-                context2d.fillStyle = "#000";
-                context2d.fill();
-            }
+            // Second, draw points which are selected by brushes
+            this.scatterPlot.spData.sampleData
+                .forEach(function (row, i) {
+                if (thisPlot.scatterPlot.spData.cutRows[i]) {
+                    if (picking) {
+                        thisPlot.drawPickingPoint(row, i, xPlot, yPlot, context2d);
+                    }
+                    else {
+                        thisPlot.drawPoint(row, i, xPlot, yPlot, context2d, false);
+                    }
+                }
+            });
         }
-        // eslint-disable-next-line max-lines-per-function
-        drawPCanvas() {
-            const canvasSelector = this.scatterPlot.canvasSelector(true);
-            const canvasNode = d3.select(canvasSelector).node();
-            if (!canvasNode) {
-                console.error("canvasNode is null");
-                return;
-            }
-            const context2d = canvasNode.getContext("2d");
-            if (!context2d) {
-                console.error("context2d is null");
-                return;
-            }
-            const thisPlot = this;
-            const xScaleRange = this.scatterPlot.xScale.range();
-            const yScaleRange = this.scatterPlot.yScale.range();
-            const xPlot = -xScaleRange[0];
-            const yPlot = -yScaleRange[1];
-            this.scatterPlot.spData.sampleData
-                .forEach(function (row, i) {
-                if (thisPlot.scatterPlot.spData.cutRows[i]) {
-                    return;
-                }
-                const size = 2 * spm.ScatterPlot.pointRadius;
-                const x = Math.round(thisPlot.cx(row, i) + xPlot - spm.ScatterPlot.pointRadius);
-                const y = Math.round(thisPlot.cy(row, i) + yPlot - spm.ScatterPlot.pointRadius);
-                context2d.beginPath();
-                context2d.rect(x, y, size, size);
-                context2d.fillStyle = PointsPlot.pickingColor(i);
-                context2d.fill();
-            });
-            this.scatterPlot.spData.sampleData
-                .forEach(function (row, i) {
-                if (!thisPlot.scatterPlot.spData.cutRows[i]) {
-                    return;
-                }
-                const size = 2 * spm.ScatterPlot.pointRadius;
-                const x = Math.round(thisPlot.cx(row, i) + xPlot - spm.ScatterPlot.pointRadius);
-                const y = Math.round(thisPlot.cy(row, i) + yPlot - spm.ScatterPlot.pointRadius);
-                context2d.beginPath();
-                context2d.rect(x, y, size, size);
-                context2d.fillStyle = PointsPlot.pickingColor(i);
-                context2d.fill();
-            });
+        drawPoint(row, rowIndex, xPlot, yPlot, context2d, useWatermark) {
+            const cx = this.scatterPlot.cx(row, rowIndex) + xPlot;
+            const cy = this.scatterPlot.cy(row, rowIndex) + yPlot;
+            const r = this.scatterPlot.style.plotProperties.point.radius;
+            context2d.beginPath();
+            context2d.arc(cx, cy, r, 0, 2 * Math.PI, false);
+            context2d.fillStyle = useWatermark
+                ? this.scatterPlot.style.plotProperties.watermarkColor
+                : this.addAlpha(this.scatterPlot.pointColor(row));
+            context2d.fill();
+        }
+        drawPickingPoint(row, rowIndex, xPlot, yPlot, context2d) {
+            const size = 2 * this.scatterPlot.style.plotProperties.point.radius;
+            const x = Math.round(this.scatterPlot.cx(row, rowIndex) + xPlot - this.scatterPlot.style.plotProperties.point.radius);
+            const y = Math.round(this.scatterPlot.cy(row, rowIndex) + yPlot - this.scatterPlot.style.plotProperties.point.radius);
+            context2d.beginPath();
+            context2d.rect(x, y, size, size);
+            context2d.fillStyle = PointsPlot.pickingColor(rowIndex);
+            context2d.fill();
         }
         static pickingColor(dataIndex) {
             const hex = "00000" + dataIndex.toString(16);
@@ -2654,8 +2950,8 @@ var spm;
         }
         generate(plotSelection) {
             const regrPlot = plotSelection.append("g").attr("class", "regressionPlots");
-            const cut = regrPlot.append("g").attr("class", "cut");
             const uncut = regrPlot.append("g").attr("class", "uncut");
+            const cut = regrPlot.append("g").attr("class", "cut");
             // About linear regression
             cut.append("g").attr("class", "linearGroup");
             cut.append("g").attr("class", "subLinearGroup");
@@ -2724,19 +3020,9 @@ var spm;
             }
             plotGroup.selectAll("line").data(dataList)
                 .join(enter => enter.append("line"), update => update, exit => exit.remove())
-                .attr("stroke-width", 4)
-                .style("visibility", "hidden")
-                .attr("stroke", (_data, i) => {
-                if (!(filtering & RegressionPlot.CUT_FILTER)) {
-                    return null;
-                }
-                if (filtering & RegressionPlot.SUB_FILTER) {
-                    return thisPlot.subColorScale(i);
-                }
-                return thisPlot.scatterPlot.zColumn === null || thisPlot.scatterPlot.zColumn.categories === null
-                    ? spm.SpConst.NO_CAT_COLOR
-                    : spm.SpConst.LIGHTER_NO_CAT_COLOR;
-            })
+                .attr("stroke-width", this.scatterPlot.style.plotProperties.regression.strokeWidth)
+                .attr("stroke", (_data, i) => this.strokeColor(i, filtering))
+                .attr("fill", "none")
                 .attr("x1", data => thisPlot.linearRegressionX1(data, filtering))
                 .attr("x2", data => thisPlot.linearRegressionX2(data, filtering))
                 .attr("y1", data => thisPlot.linearRegressionY1(data, filtering))
@@ -2744,9 +3030,22 @@ var spm;
                 .on("mouseover", function (regressionData, i) {
                 thisPlot.mouseoverLinear(this, regressionData, i, filtering);
             })
-                .on("mouseout", function () {
-                thisPlot.mouseout(d3.select(this));
+                .on("mouseout", function (_data, i) {
+                if (thisPlot.scatterPlot.mouseMode === spm.SpConst.tooltipMouse.key) {
+                    d3.select(thisPlot.scatterPlot.bindto + " .mspTooltip").style("display", "none");
+                    d3.select(this).attr("stroke", () => thisPlot.strokeColor(i, filtering));
+                }
             });
+        }
+        strokeColor(catIndex, filtering, k) {
+            if (!(filtering & RegressionPlot.CUT_FILTER)) {
+                return null;
+            }
+            const color = (filtering & RegressionPlot.SUB_FILTER)
+                ? this.subColorScale(catIndex)
+                : this.scatterPlot.style.plotProperties.noCatColor;
+            const d3Color = d3.color(color);
+            return d3Color ? d3Color.darker(k).toString() : color;
         }
         linearRegressionX1(data, filtering) {
             const linearRegression = RegressionPlot.linearRegression(data, filtering);
@@ -2768,11 +3067,11 @@ var spm;
             if (this.scatterPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
                 return;
             }
-            d3.select(line).style("visibility", "visible");
+            d3.select(line).attr("stroke", () => this.strokeColor(i, filtering, 2));
             const rSquared = (data.cutLinearRegression)
                 ? spm.ExpFormat.format(data.cutLinearRegression.rSquared)
                 : "Not computed";
-            const tooltipLocation = this.tooltipLocation(line);
+            const tooltipLocation = this.tooltipLocation();
             d3.select(this.scatterPlot.bindto + " .mspTooltip").remove();
             const mspDiv = d3.select(this.scatterPlot.bindto + " .mspDiv");
             const tooltip = mspDiv.append("div")
@@ -2784,41 +3083,39 @@ var spm;
                 .attr("class", "title")
                 .html("Linear Regression");
             if (filtering & RegressionPlot.SUB_FILTER && this.scatterPlot.zColumn !== null) {
+                const coloringHtml = `<span class='swatch' style='background:${this.strokeColor(i, filtering)}'>&nbsp;</span>`;
                 const category = this.scatterPlot.zColumn.categories
                     ? this.scatterPlot.zColumn.categories[i]
                     : "undefined";
                 tooltip.append("div")
-                    .html(`where z axis ${this.scatterPlot.zColumn.labelText()} = ${category}`);
+                    .html(`where ${this.scatterPlot.zColumn.labelText()} is: ${RegressionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
             }
             if (filtering & RegressionPlot.CUT_FILTER) {
                 const filteredUncutData = data.filterData(this.scatterPlot.spData.sampleData);
                 const filteredCutData = data.filterData(this.scatterPlot.spData.cutData());
                 tooltip.append("div")
-                    .html(`used points:${filteredCutData.length} (cut points: ${filteredUncutData.length - filteredCutData.length})`);
+                    .html(`${filteredCutData.length} sample points (${filteredUncutData.length - filteredCutData.length} filtered points)`);
             }
             tooltip.append("div")
                 .html(`<span class="r2">=> r2</span>: <span class="r2Value">${rSquared}</span>`);
         }
-        tooltipLocation(path) {
+        static brIze(category) {
+            const splittedCategory = category.toString().split(", ");
+            if (splittedCategory.length > 1) {
+                return "<br>" + splittedCategory.join(",<br>") + "<br>";
+            }
+            return splittedCategory[0];
+        }
+        tooltipLocation() {
             const mspDivNode = d3.select(this.scatterPlot.bindto + " .mspDiv").node();
             const parentBounds = (mspDivNode === null) ? null : mspDivNode.getBoundingClientRect();
             const xParent = (parentBounds === null) ? 0 : parentBounds.x;
-            const yParent = (parentBounds === null) ? 0 : parentBounds.y;
-            const elementBounds = path.getBoundingClientRect();
-            const xRect = elementBounds.x;
-            const yRect = elementBounds.y;
-            const wRect = elementBounds.width;
-            const hRect = elementBounds.height;
-            return [xRect - xParent + wRect, yRect - yParent + hRect];
+            const plotGroup = d3.select(this.scatterPlot.bindto + " .mspGroup").node();
+            const elementBounds = (plotGroup === null) ? null : plotGroup.getBoundingClientRect();
+            const xRect = (elementBounds === null) ? 0 : elementBounds.x;
+            const wRect = (elementBounds === null) ? 0 : elementBounds.width;
+            return [xRect - xParent + wRect + 5, this.scatterPlot.yPlot];
         }
-        mouseout(lineSelection) {
-            if (this.scatterPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
-                return;
-            }
-            lineSelection.style("visibility", "hidden");
-            d3.select(this.scatterPlot.bindto + " .mspTooltip").style("display", "none");
-        }
-        // eslint-disable-next-line max-lines-per-function
         updateLoessPlot(regrGroup, filtering) {
             const thisPlot = this;
             const dataList = filtering & RegressionPlot.SUB_FILTER ? this.subRegrList : [this.mainRegr];
@@ -2834,19 +3131,9 @@ var spm;
             }
             plotGroup.selectAll("path").data(dataList)
                 .join(enter => enter.append("path"), update => update, exit => exit.remove())
-                .attr("stroke-width", 4)
-                .style("visibility", "hidden")
-                .attr("stroke", (_data, i) => {
-                if (!(filtering & RegressionPlot.CUT_FILTER)) {
-                    return null;
-                }
-                if (filtering & RegressionPlot.SUB_FILTER) {
-                    return thisPlot.subColorScale(i);
-                }
-                return thisPlot.scatterPlot.zColumn === null || thisPlot.scatterPlot.zColumn.categories === null
-                    ? spm.SpConst.NO_CAT_COLOR
-                    : spm.SpConst.LIGHTER_NO_CAT_COLOR;
-            })
+                .attr("stroke-width", this.scatterPlot.style.plotProperties.regression.strokeWidth)
+                .attr("stroke", (_data, i) => this.strokeColor(i, filtering))
+                .attr("fill", "none")
                 .attr("d", function (data) {
                 const loessRegression = RegressionPlot.loessRegression(data, filtering);
                 const lineGenerator = d3.line()
@@ -2858,8 +3145,11 @@ var spm;
                 .on("mouseover", function (regressionData, i) {
                 thisPlot.mouseoverLoess(this, regressionData, i, filtering);
             })
-                .on("mouseout", function () {
-                thisPlot.mouseout(d3.select(this));
+                .on("mouseout", function (_data, i) {
+                if (thisPlot.scatterPlot.mouseMode === spm.SpConst.tooltipMouse.key) {
+                    d3.select(thisPlot.scatterPlot.bindto + " .mspTooltip").style("display", "none");
+                    d3.select(this).attr("stroke", () => thisPlot.strokeColor(i, filtering));
+                }
             });
         }
         xScale(value) {
@@ -2874,9 +3164,8 @@ var spm;
             if (this.scatterPlot.mouseMode !== spm.SpConst.tooltipMouse.key) {
                 return;
             }
-            const pathSelection = d3.select(path);
-            pathSelection.style("visibility", "visible");
-            const tooltipLocation = this.tooltipLocation(path);
+            d3.select(path).attr("stroke", () => this.strokeColor(i, filtering, 2));
+            const tooltipLocation = this.tooltipLocation();
             d3.select(this.scatterPlot.bindto + " .mspTooltip").remove();
             const mspDiv = d3.select(this.scatterPlot.bindto + " .mspDiv");
             const tooltip = mspDiv.append("div")
@@ -2891,14 +3180,15 @@ var spm;
                 const category = this.scatterPlot.zColumn.categories
                     ? this.scatterPlot.zColumn.categories[i]
                     : "undefined";
+                const coloringHtml = `<span class='swatch' style='background:${this.strokeColor(i, filtering)}'>&nbsp;</span>`;
                 tooltip.append("div")
-                    .html(`where z axis ${this.scatterPlot.zColumn.labelText()} = ${category}`);
+                    .html(`where ${this.scatterPlot.zColumn.labelText()} is: ${RegressionPlot.brIze(category)} (color ${coloringHtml}&nbsp;)`);
             }
             if (filtering & RegressionPlot.CUT_FILTER) {
                 const filteredUncutData = data.filterData(this.scatterPlot.spData.sampleData);
                 const filteredCutData = data.filterData(this.scatterPlot.spData.cutData());
                 tooltip.append("div")
-                    .html(`used points: ${filteredCutData.length} (cut points: ${filteredUncutData.length - filteredCutData.length})`);
+                    .html(`${filteredCutData.length} sample points (${filteredUncutData.length - filteredCutData.length} filtered points)`);
             }
         }
         static linearRegression(data, filtering) {
@@ -2938,69 +3228,6 @@ var spm;
                 return row[column.dim] === catIndex;
             };
         }
-        drawCanvas() {
-            if (this.useLinearRep()) {
-                this.drawPlotCanvas(RegressionPlot.LINEAR_REP, RegressionPlot.SUB_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LINEAR_REP, RegressionPlot.SUB_FILTER | RegressionPlot.CUT_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LINEAR_REP, RegressionPlot.CUT_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LINEAR_REP, RegressionPlot.NO_FILTER);
-            }
-            if (this.useLoessRep()) {
-                this.drawPlotCanvas(RegressionPlot.LOESS_REP, RegressionPlot.SUB_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LOESS_REP, RegressionPlot.SUB_FILTER | RegressionPlot.CUT_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LOESS_REP, RegressionPlot.CUT_FILTER);
-                this.drawPlotCanvas(RegressionPlot.LOESS_REP, RegressionPlot.NO_FILTER);
-            }
-        }
-        // eslint-disable-next-line max-lines-per-function
-        drawPlotCanvas(repType, filtering) {
-            if (!this.plotVisibility(filtering)) {
-                return;
-            }
-            const canvasSelector = this.scatterPlot.canvasSelector(false);
-            const canvasNode = d3.select(canvasSelector).node();
-            if (!canvasNode) {
-                console.error("canvasNode is null");
-                return;
-            }
-            const context2d = canvasNode.getContext("2d");
-            if (!context2d) {
-                console.error("context2d is null");
-                return;
-            }
-            const thisPlot = this;
-            const xScaleRange = this.scatterPlot.xScale.range();
-            const yScaleRange = this.scatterPlot.yScale.range();
-            const xPlot = -xScaleRange[0];
-            const yPlot = -yScaleRange[1];
-            context2d.globalAlpha = 0.5;
-            const lineGenerator = d3.line()
-                .curve(d3.curveBasis)
-                .x(d => xPlot + thisPlot.xScale(d[0]))
-                .y(d => yPlot + thisPlot.yScale(d[1]))
-                .context(context2d);
-            const dataList = filtering & RegressionPlot.SUB_FILTER ? this.subRegrList : [this.mainRegr];
-            dataList.forEach(function (regressionData, i) {
-                context2d.beginPath();
-                const regression = repType === RegressionPlot.LINEAR_REP
-                    ? RegressionPlot.linearRegression(regressionData, filtering)
-                    : RegressionPlot.loessRegression(regressionData, filtering);
-                lineGenerator(regression);
-                context2d.lineWidth = 3;
-                if (!(filtering & RegressionPlot.CUT_FILTER)) {
-                    console.warn("!(filtering & RegressionPlot.CUT_FILTER)");
-                }
-                if (filtering & RegressionPlot.SUB_FILTER) {
-                    context2d.strokeStyle = thisPlot.subColorScale(i);
-                }
-                else {
-                    context2d.strokeStyle = thisPlot.scatterPlot.zColumn === null || thisPlot.scatterPlot.zColumn.categories === null
-                        ? spm.SpConst.NO_CAT_COLOR
-                        : spm.SpConst.LIGHTER_NO_CAT_COLOR;
-                }
-                context2d.stroke();
-            });
-        }
     }
     RegressionPlot.NO_FILTER = 0;
     RegressionPlot.CUT_FILTER = 1;
@@ -3013,121 +3240,23 @@ var spm;
 var spm;
 (function (spm) {
     class RowFilter {
-        constructor(column) {
-            // Set when a brush is modified
-            // Read when multibrush is initialized
-            this.contCutoffs = null;
-            this.keptCatIndexes = null;
-            this.column = column;
+        constructor(xDim, yDim) {
+            this.xyCutoffs = null;
+            this.xDim = xDim;
+            this.yDim = yDim;
         }
-        // To call when a category is clicked.
-        toggleCategory(catIndex) {
-            if (this.column.categories) {
-                if (this.keptCatIndexes === null) {
-                    this.keptCatIndexes = new Set(d3.range(this.column.categories.length));
-                    this.keptCatIndexes.delete(catIndex);
-                }
-                else if (this.keptCatIndexes.has(catIndex)) {
-                    this.keptCatIndexes.delete(catIndex);
-                }
-                else {
-                    this.keptCatIndexes.add(catIndex);
-                    if (this.keptCatIndexes.size === this.column.categories.length) {
-                        this.keptCatIndexes = null;
-                    }
-                }
-            }
-            else {
-                console.error("categories is null but 'toggleCategory' is called.");
-            }
-        }
-        // To call when the overlay of categories is clicked.
-        toggleCategories() {
-            if (this.column.categories === null) {
-                console.error("categories is null but 'toggleCategories' is called.");
-            }
-            else {
-                if (this.keptCatIndexes === null) {
-                    this.keptCatIndexes = new Set();
-                }
-                else {
-                    this.keptCatIndexes = null;
-                }
-            }
-        }
-        // To call to respond to a request (API used by R htmlwidget)
-        getCutoffs() {
-            const categories = this.column.categories;
-            if (categories) {
-                if (this.keptCatIndexes === null) {
-                    return null;
-                }
-                return [...this.keptCatIndexes].map(catIndex => categories[catIndex]);
-            }
-            return this.contCutoffs;
-        }
-        // To call to respond to a request (API used by R htmlwidget)
-        setCutoffs(cutoffs) {
-            if (cutoffs) {
-                const categories = this.column.categories;
-                if (categories) {
-                    if (cutoffs.length !== 0 && typeof cutoffs[0] !== "string" && typeof cutoffs[0] !== "number") {
-                        console.log("Wrong categorical cutoffs are provided:", cutoffs);
-                    }
-                    else {
-                        const catCutoffs = cutoffs;
-                        const indexes = catCutoffs
-                            .map(catCo => {
-                            const catIndex = categories.indexOf(catCo.toString());
-                            if (catIndex === -1) {
-                                console.log(catCo + " is not a category of " + this.column.dim);
-                            }
-                            return catIndex;
-                        })
-                            .filter(index => index !== -1);
-                        this.keptCatIndexes = new Set(indexes);
-                    }
-                }
-                else {
-                    if (typeof cutoffs[0] === "string" || typeof cutoffs[0] === "number") {
-                        console.log("categories is null but categorical cutoffs are provided:", cutoffs);
-                    }
-                    else {
-                        this.contCutoffs = cutoffs.map(co => {
-                            // reverse order
-                            return co.sort(function (a, b) {
-                                return b - a;
-                            });
-                        });
-                    }
-                }
-            }
-            else {
-                this.contCutoffs = null;
-                this.keptCatIndexes = null;
-            }
-        }
-        // Not used
-        hasFilters() {
-            return this.contCutoffs !== null || this.keptCatIndexes !== null;
-        }
-        // Used to class 'category' dom elements (active/inactive)
-        // Used to update 'cutRows' attribute
         isKeptRow(row) {
-            return this.isKeptValue(row[this.column.dim]);
+            return this.isKeptValue(row[this.xDim], row[this.yDim]);
         }
-        isKeptValue(value) {
-            if (this.contCutoffs !== null) {
+        isKeptValue(xValue, yValue) {
+            if (this.xyCutoffs !== null) {
                 let active = false;
-                this.contCutoffs.forEach(function (contCutoff) {
-                    active =
-                        active ||
-                            (contCutoff[0] <= value && value <= contCutoff[1]);
+                this.xyCutoffs.forEach(function (xyCutoff) {
+                    const xActive = xyCutoff[0] === null || xyCutoff[0][0] <= xValue && xValue <= xyCutoff[0][1];
+                    const yActive = xyCutoff[1] === null || xyCutoff[1][0] <= yValue && yValue <= xyCutoff[1][1];
+                    active = active || (xActive && yActive);
                 });
                 return active;
-            }
-            if (this.keptCatIndexes !== null) {
-                return this.keptCatIndexes.has(value);
             }
             return true;
         }
@@ -3153,7 +3282,7 @@ var spm;
             this.zScale = d3.scaleLinear();
             this.continuousCslAxis = d3.axisRight(this.zScale)
                 .tickFormat(ScatterPlot.prototype.formatZValue.bind(this));
-            this.brush = null;
+            this.zoomBrush = null;
             this.dblClickTimeout = null;
             this.regressionPlot = null;
             this.xDistribPlot = null;
@@ -3162,6 +3291,7 @@ var spm;
             this.verViolinPlots = [];
             this.pickingReady = false;
             this.spData = spData;
+            this.style = config.style;
             this.bindto = config.bindto;
             this.index = config.index;
             this.xColumn = spData.columns[spData.dimensions[0]];
@@ -3176,8 +3306,7 @@ var spm;
             this.distribVisibility = config.distribVisibility;
             this.distribType = config.distribType;
             this.axisVisibility = config.axisVisibility;
-            this.xRowFilter = new spm.RowFilter(this.xColumn);
-            this.yRowFilter = new spm.RowFilter(this.yColumn);
+            this.multiBrush = null;
             this.contColorScale = d3.scaleSequential(spm.SpConst.CONTINUOUS_CS[this.continuousCsId]);
             this.catColorScale = spm.SpConst.CATEGORIAL_CS[this.categoricalCsId];
         }
@@ -3192,14 +3321,12 @@ var spm;
             this.xDistribPlot = null;
             this.horViolinPlots = [];
             this.verViolinPlots = [];
-            this.xRowFilter = new spm.RowFilter(this.xColumn);
         }
         setYColumn(column) {
             this.yColumn = column;
             this.yDistribPlot = null;
             this.horViolinPlots = [];
             this.verViolinPlots = [];
-            this.yRowFilter = new spm.RowFilter(this.yColumn);
         }
         setZColumn(column) {
             this.zColumn = column;
@@ -3270,11 +3397,31 @@ var spm;
                 this.yPlot = ySpRect - yParent;
                 // React to 'HL_POINT_EVENT' to highlight the point which is hovered by mouse
                 const thisPlot = this;
-                this.spData.on(spm.SpData.HL_POINT_EVENT + "." + this.index, function () {
+                this.spData.on(spm.SpData.HL_POINT_EVENT + "." + this.index, function (hlEvent) {
                     if (thisPlot.plotSelection().size() !== 0) {
-                        thisPlot.drawCanvas(false);
+                        thisPlot.hlPoint(thisPlot.plotSelection(), hlEvent);
                     }
                 });
+                // Add 'foreignObject' to use a 'drawing' canvas inside svg
+                plotSelection.select(".spArea")
+                    .append("foreignObject")
+                    .style("pointer-events", "none")
+                    .attr("class", "canvasGroup" + this.index + " drawing")
+                    .attr("x", xScaleRange[0])
+                    .attr("y", yScaleRange[1])
+                    .attr("width", xScaleRange[1] - xScaleRange[0])
+                    .attr("height", yScaleRange[0] - yScaleRange[1])
+                    .append("xhtml:div");
+                // Add 'foreignObject' to use a 'picking' canvas inside svg
+                plotSelection.select(".spArea")
+                    .append("foreignObject")
+                    .style("pointer-events", "none")
+                    .attr("class", "canvasGroup" + this.index + " picking")
+                    .attr("x", xScaleRange[0])
+                    .attr("y", yScaleRange[1])
+                    .attr("width", xScaleRange[1] - xScaleRange[0])
+                    .attr("height", yScaleRange[0] - yScaleRange[1])
+                    .append("xhtml:div");
             }
             this.drawRegressionPlots(updateType, plotSelection);
             this.drawDistribPlots(updateType, plotSelection);
@@ -3282,7 +3429,46 @@ var spm;
             this.drawHorViolinPlots(updateType, plotSelection);
             this.drawCsl(updateType, plotSelection);
             this.drawBrush(updateType, plotSelection);
-            this.drawCanvas(false, plotSelection);
+            this.drawCanvas(false);
+        }
+        hlPoint(plotSelection, hlEvent) {
+            const i = hlEvent.rowIndex;
+            const cx = i === null ? 0 : this.cx(this.spData.sampleData[i], i);
+            const cy = i === null ? 0 : this.cy(this.spData.sampleData[i], i);
+            const color = i === null ? "black" : this.pointColor(this.spData.sampleData[i]);
+            const spArea = plotSelection.select(".spArea");
+            spArea.selectAll(".hlPoint").data(["hlPoint"])
+                .join(enter => enter.append("circle")
+                .attr("class", "hlPoint")
+                .style("pointer-events", "none"), update => update, exit => exit.remove())
+                .attr("fill", color)
+                .attr("cx", cx)
+                .attr("cy", cy)
+                .attr("r", 2 * this.style.plotProperties.point.radius)
+                .attr("display", i === null ? "none" : "block");
+        }
+        cx(row, i) {
+            const cx = (this.xColumn.categories === null)
+                ? this.xScale(row[this.xColumn.dim])
+                : this.xScale(row[this.xColumn.dim] + this.spData.jitterXValues[i]);
+            return typeof cx === "undefined" ? NaN : cx;
+        }
+        cy(row, i) {
+            const cy = (this.yColumn.categories === null)
+                ? this.yScale(row[this.yColumn.dim])
+                : this.yScale(row[this.yColumn.dim] + this.spData.jitterYValues[i]);
+            return typeof cy === "undefined" ? NaN : cy;
+        }
+        pointColor(row) {
+            if (this.zColumn !== null) {
+                const pointColor = (this.zColumn.categories === null)
+                    ? this.contColorScale(row[this.zColumn.dim])
+                    : this.catColorScale(row[this.zColumn.dim]);
+                if (typeof pointColor !== "undefined") {
+                    return pointColor;
+                }
+            }
+            return this.style.plotProperties.noCatColor;
         }
         hlGraph(highlight) {
             const plotSelection = this.plotSelection();
@@ -3327,8 +3513,9 @@ var spm;
                     orientation: spm.DistributionPlot.HOR,
                     mouseMode: this.mouseMode,
                     categoricalCsId: this.categoricalCsId,
-                    distribType: this.distribType
-                });
+                    distribType: this.distribType,
+                    style: this.style
+                }, this.index, this.xPlot, this.yPlot);
                 this.xDistribPlot.generate(distribGroup, "#x-clip");
             }
             if (updateType & (ScatterPlot.INIT | ScatterPlot.SHAPE | ScatterPlot.RANGE | ScatterPlot.DOMAIN | ScatterPlot.Z_AXIS)) {
@@ -3349,8 +3536,9 @@ var spm;
                     orientation: spm.DistributionPlot.VER,
                     mouseMode: this.mouseMode,
                     categoricalCsId: this.categoricalCsId,
-                    distribType: this.distribType
-                });
+                    distribType: this.distribType,
+                    style: this.style
+                }, this.index, this.xPlot, this.yPlot);
                 this.yDistribPlot.generate(distribGroup, "#y-clip");
             }
             if (updateType & (ScatterPlot.INIT | ScatterPlot.SHAPE | ScatterPlot.RANGE | ScatterPlot.DOMAIN | ScatterPlot.Z_AXIS)) {
@@ -3380,8 +3568,9 @@ var spm;
                     orientation: spm.DistributionPlot.VER,
                     mouseMode: this.mouseMode,
                     categoricalCsId: this.categoricalCsId,
-                    distribType: this.distribType
-                }));
+                    distribType: this.distribType,
+                    style: this.style
+                }, this.index, this.xPlot, this.yPlot));
             }
             spArea.selectAll(".ver.violinGroup").data(this.verViolinPlots)
                 .join(enter => enter.append("g")
@@ -3413,8 +3602,9 @@ var spm;
                     orientation: spm.DistributionPlot.HOR,
                     mouseMode: this.mouseMode,
                     categoricalCsId: this.categoricalCsId,
-                    distribType: this.distribType
-                }));
+                    distribType: this.distribType,
+                    style: this.style
+                }, this.index, this.xPlot, this.yPlot));
             }
             spArea.selectAll(".hor.violinGroup").data(this.horViolinPlots)
                 .join(enter => enter.append("g")
@@ -3568,7 +3758,7 @@ var spm;
         drawCategoricalCsl(plotSelection) {
             const zColumn = this.zColumn;
             if (zColumn === null || !zColumn.categories) {
-                console.log("'drawCategoricalCsl' called, but Z column is not categorial");
+                console.error("'drawCategoricalCsl' called, but Z column is not categorial");
                 return;
             }
             const thisPlot = this;
@@ -3620,7 +3810,10 @@ var spm;
                     .style("text-anchor", "start")
                     .attr("display", this.axisVisibility.xValues ? "block" : "none");
                 if (this.axisVisibility.xTitle) {
-                    axesGroup.select(".x.scatterlabel").text(this.xColumn.labelText());
+                    axesGroup.select(".x.scatterlabel")
+                        .text(this.xColumn.labelText())
+                        .classed("input", this.xColumn.isInput())
+                        .classed("output", this.xColumn.isOutput());
                 }
             }
         }
@@ -3644,7 +3837,10 @@ var spm;
                     .selectAll(".tick text")
                     .attr("display", this.axisVisibility.yValues ? "block" : "none");
                 if (this.axisVisibility.yTitle) {
-                    axesGroup.select(".y.scatterlabel").text(this.yColumn.labelText());
+                    axesGroup.select(".y.scatterlabel")
+                        .text(this.yColumn.labelText())
+                        .classed("input", this.yColumn.isInput())
+                        .classed("output", this.yColumn.isOutput());
                 }
             }
         }
@@ -3688,17 +3884,44 @@ var spm;
                 return Math.abs(yZoneRange[index][1] - yZoneRange[index][0]);
             });
         }
-        fixBrush() {
-            const plotSelection = this.plotSelection();
-            if (this.mouseMode === spm.SpConst.tooltipMouse.key) {
-                plotSelection.selectAll(".selection").style("display", "none");
-                plotSelection.selectAll(".handle").style("display", "none");
-                plotSelection.selectAll(".overlay").style("pointer-events", "auto");
+        setContCutoff(brushSelections, _brushEnd) {
+            const xyCutoffs = brushSelections
+                .map(brushSelection => [
+                [brushSelection[0][0], brushSelection[1][0]].map(this.xScale.invert).sort((a, b) => a - b),
+                [brushSelection[0][1], brushSelection[1][1]].map(this.yScale.invert).sort((a, b) => a - b)
+            ]);
+            if (xyCutoffs === null || xyCutoffs.length === 0) {
+                this.spData.setXYCutoffs(this.xColumn.dim, this.yColumn.dim, null);
             }
             else {
-                plotSelection.selectAll(".selection").style("display", null);
-                plotSelection.selectAll(".handle").style("display", null);
-                plotSelection.selectAll(".overlay").style("pointer-events", "all");
+                this.spData.setXYCutoffs(this.xColumn.dim, this.yColumn.dim, xyCutoffs);
+            }
+            this.spData.rowFilterChange();
+            // this.sendCutoffEvent(dim, brushEnd);
+        }
+        fixBrush() {
+            const plotSelection = this.plotSelection();
+            const multiBrushGroup = d3.select(this.bindto + " ." + spm.MultiBrush.multiBrushClass(this.index));
+            if (this.mouseMode === spm.SpConst.filterMouse.key) {
+                multiBrushGroup.selectAll(".selection").style("display", null);
+                multiBrushGroup.selectAll(".handle").style("display", null);
+                multiBrushGroup.selectAll(".overlay").style("pointer-events", "all");
+            }
+            else {
+                multiBrushGroup.selectAll(".selection").style("display", "none");
+                multiBrushGroup.selectAll(".handle").style("display", "none");
+                multiBrushGroup.selectAll(".overlay").style("pointer-events", "auto");
+            }
+            const zoomBrushGroup = d3.select(this.bindto + " ." + this.zoomBrushClass());
+            if (this.mouseMode === spm.SpConst.zoomMouse.key) {
+                zoomBrushGroup.selectAll(".selection").style("display", null);
+                zoomBrushGroup.selectAll(".handle").style("display", null);
+                zoomBrushGroup.selectAll(".overlay").style("pointer-events", "all");
+            }
+            else {
+                zoomBrushGroup.selectAll(".selection").style("display", "none");
+                zoomBrushGroup.selectAll(".handle").style("display", "none");
+                zoomBrushGroup.selectAll(".overlay").style("pointer-events", "auto");
             }
             if (this.mouseMode === spm.SpConst.filterMouse.key) {
                 this.drawBrush(ScatterPlot.RANGE, plotSelection);
@@ -3706,161 +3929,140 @@ var spm;
         }
         drawBrush(updateType, plotSelection) {
             const thisPlot = this;
-            const spArea = plotSelection.select(".spArea");
-            if (updateType & ScatterPlot.INIT || !this.brush) {
-                this.brush = d3.brush()
-                    // .on("start", () => {
-                    // })
-                    .on("brush", () => {
-                    const brushZone = d3.event.selection;
-                    thisPlot.brushmove(brushZone);
-                })
-                    .on("end", () => {
-                    const brushZone = d3.event.selection;
-                    thisPlot.brushend(brushZone);
+            if (updateType & ScatterPlot.INIT) {
+                plotSelection.select(".spArea").append("g")
+                    .attr("class", function () {
+                    return spm.MultiBrush.multiBrushClass(thisPlot.index);
                 });
-                const xExtent = [
-                    thisPlot.xScale.range()[0],
-                    thisPlot.yScale.range()[1]
-                ];
-                const yExtent = [
-                    thisPlot.xScale.range()[1],
-                    thisPlot.yScale.range()[0]
-                ];
-                this.brush.extent([xExtent, yExtent]);
-                spArea.call(this.brush);
+                plotSelection.select(".spArea").append("g")
+                    .attr("class", function () {
+                    return thisPlot.zoomBrushClass();
+                });
+                this.initZoomBrush();
             }
-            if (thisPlot.mouseMode === spm.SpConst.filterMouse.key
-                && this.xRowFilter.contCutoffs
-                && this.yRowFilter.contCutoffs) {
-                const xExtent = d3.extent(this.xRowFilter.contCutoffs[0].map(thisPlot.xScale).map(ScatterPlot.undef2Nan));
-                const yExtent = d3.extent(this.yRowFilter.contCutoffs[0].map(thisPlot.yScale).map(ScatterPlot.undef2Nan));
-                spArea.call(this.brush.move, [[xExtent[0], yExtent[0]], [xExtent[1], yExtent[1]]]);
+            if (thisPlot.mouseMode === spm.SpConst.filterMouse.key) {
+                if (this.multiBrush === null ||
+                    d3.select(this.bindto).select("." + spm.MultiBrush.multiBrushClass(this.index))
+                        .selectAll(".brush")
+                        .size() === 0) {
+                    this.multiBrush = new spm.MultiBrush(this);
+                }
+                this.multiBrush.initFrom(this.spData.getRowFilter(this.xColumn.dim, this.yColumn.dim).xyCutoffs);
             }
         }
-        // Highlight the selected points.
-        brushmove(brushZone) {
-            if (this.mouseMode !== spm.SpConst.filterMouse.key) {
-                return;
-            }
-            if (brushZone === null) {
-                this.xRowFilter.contCutoffs = null;
-                this.yRowFilter.contCutoffs = null;
-            }
-            else {
-                this.xRowFilter.contCutoffs = [[brushZone[0][0], brushZone[1][0]]]
-                    .map(interval => interval.map(this.xScale.invert))
-                    .map(interval => {
-                    return interval.sort(function (a, b) {
-                        return a - b;
-                    });
-                });
-                this.yRowFilter.contCutoffs = [[brushZone[1][1], brushZone[0][1]]]
-                    .map(interval => interval.map(this.yScale.invert))
-                    .map(interval => {
-                    return interval.sort(function (a, b) {
-                        return a - b;
-                    });
-                });
-            }
-            this.spData.rowFilterChange();
+        initZoomBrush() {
+            const thisPlot = this;
+            this.zoomBrush = d3.brush()
+                // At the end of a brush gesture (such as on mouseup), apply zoom action if 'mouseMode' is 'zoom'
+                .on("end", () => {
+                const brushZone = d3.event.selection;
+                thisPlot.applyZoom(brushZone);
+            });
+            // Set brushable area
+            const xExtent = [
+                thisPlot.xScale.range()[0],
+                thisPlot.yScale.range()[1]
+            ];
+            const yExtent = [
+                thisPlot.xScale.range()[1],
+                thisPlot.yScale.range()[0]
+            ];
+            this.zoomBrush.extent([xExtent, yExtent]);
+            // Create the SVG elements necessary to display the brush selection and to receive input events for interaction
+            d3.select(this.bindto + " ." + this.zoomBrushClass()).call(this.zoomBrush);
         }
         // eslint-disable-next-line max-lines-per-function
-        brushend(brushZone) {
-            if (!this.brush) {
+        applyZoom(brushZone) {
+            if (!this.zoomBrush) {
                 return;
             }
             const thisPlot = this;
-            if (this.mouseMode === spm.SpConst.filterMouse.key) {
-                // If the brush is empty, select all points.
-                if (brushZone === null) {
-                    this.brushmove(null);
-                }
+            // zoom on selected zone, or unzoom when a double-click is detected
+            if (!brushZone && !this.dblClickTimeout) {
+                this.dblClickTimeout = setTimeout(function () {
+                    thisPlot.dblClickTimeout = null;
+                }, spm.SpConst.dblClickDelay);
+                return;
             }
-            else if (this.mouseMode === spm.SpConst.zoomMouse.key) {
-                // zoom on selected zone, or unzoom when a double-click is detected
-                if (!brushZone && !this.dblClickTimeout) {
-                    this.dblClickTimeout = setTimeout(function () {
-                        thisPlot.dblClickTimeout = null;
-                    }, spm.SpConst.dblClickDelay);
-                    return;
-                }
-                const plotSelection = this.plotSelection();
-                if (brushZone) {
-                    this.xScale.domain([brushZone[0][0], brushZone[1][0]].map(this.xScale.invert));
-                    this.yScale.domain([brushZone[1][1], brushZone[0][1]].map(this.yScale.invert));
-                    plotSelection.select(".spArea").call(this.brush.move, null);
-                }
-                else {
-                    this.xScale.domain(this.xColumn.domain());
-                    this.yScale.domain(this.yColumn.domain());
-                }
-                if (this.xColumn.categories === null) {
-                    this.xScale.nice();
-                }
-                if (this.yColumn.categories === null) {
-                    this.yScale.nice();
-                }
-                // Zoom for axes
-                this.drawXAxis(ScatterPlot.DOMAIN, plotSelection);
-                this.drawYAxis(ScatterPlot.DOMAIN, plotSelection);
-                // Zoom for jitter zone
-                this.drawJitterZones(ScatterPlot.DOMAIN, plotSelection);
-                // Zoom for brush
-                this.drawBrush(ScatterPlot.DOMAIN, plotSelection);
-                // Zoom for regression plot
-                if (this.regressionPlot) {
-                    this.regressionPlot.update(ScatterPlot.DOMAIN, plotSelection);
-                }
-                this.drawCanvas(false, plotSelection);
-                // Zoom for distribution plots
-                if (this.xDistribPlot && this.distribVisibility) {
-                    this.xDistribPlot.valuesScale.domain(this.xScale.domain());
-                    this.xDistribPlot.update(ScatterPlot.DOMAIN, plotSelection.select(".distribGroup"));
-                }
-                if (this.yDistribPlot && this.distribVisibility) {
-                    this.yDistribPlot.valuesScale.domain(this.yScale.domain());
-                    this.yDistribPlot.update(ScatterPlot.DOMAIN, plotSelection.select(".distribGroup"));
-                }
-                // Vertical violin plots
-                if (this.xColumn.categories) {
-                    const xCategories = this.xColumn.categories;
-                    const fullXScale = d3.scaleLinear()
-                        .range(this.xScale.range())
-                        .domain(this.xColumn.domain());
-                    plotSelection.selectAll(".ver.violinGroup").each(function (violinPlot, i) {
-                        const violinRange = ScatterPlot.verViolinRange(fullXScale, i, xCategories.length);
-                        if (brushZone) {
-                            const range = violinRange.map(fullXScale.invert).map(thisPlot.xScale).map(ScatterPlot.undef2Nan);
-                            violinPlot.distribScaleRange(range);
-                        }
-                        else {
-                            violinPlot.distribScaleRange(violinRange);
-                        }
-                        violinPlot.valuesScale.domain(thisPlot.yScale.domain());
-                        violinPlot.update(ScatterPlot.DOMAIN, d3.select(this));
-                    });
-                }
-                // Horizontal violin plots
-                if (this.yColumn.categories) {
-                    const yCategories = this.yColumn.categories;
-                    const fullYScale = d3.scaleLinear()
-                        .range(this.yScale.range())
-                        .domain(this.yColumn.domain());
-                    plotSelection.selectAll(".hor.violinGroup").each(function (violinPlot, i) {
-                        const violinRange = ScatterPlot.horViolinRange(fullYScale, i, yCategories.length);
-                        if (brushZone) {
-                            const range = violinRange.map(fullYScale.invert).map(thisPlot.yScale).map(ScatterPlot.undef2Nan);
-                            violinPlot.distribScaleRange(range);
-                        }
-                        else {
-                            violinPlot.distribScaleRange(violinRange);
-                        }
-                        violinPlot.valuesScale.domain(thisPlot.xScale.domain());
-                        violinPlot.update(ScatterPlot.DOMAIN, d3.select(this));
-                    });
-                }
+            const plotSelection = this.plotSelection();
+            if (brushZone) {
+                this.xScale.domain([brushZone[0][0], brushZone[1][0]].map(this.xScale.invert));
+                this.yScale.domain([brushZone[1][1], brushZone[0][1]].map(this.yScale.invert));
+                // Remove the brush selection
+                d3.select(this.bindto + " ." + this.zoomBrushClass()).call(this.zoomBrush.clear);
             }
+            else {
+                this.xScale.domain(this.xColumn.domain());
+                this.yScale.domain(this.yColumn.domain());
+            }
+            if (this.xColumn.categories === null) {
+                this.xScale.nice();
+            }
+            if (this.yColumn.categories === null) {
+                this.yScale.nice();
+            }
+            // Zoom for axes
+            this.drawXAxis(ScatterPlot.DOMAIN, plotSelection);
+            this.drawYAxis(ScatterPlot.DOMAIN, plotSelection);
+            // Zoom for jitter zone
+            this.drawJitterZones(ScatterPlot.DOMAIN, plotSelection);
+            // Zoom for brush
+            this.drawBrush(ScatterPlot.DOMAIN, plotSelection);
+            // Zoom for regression plot
+            if (this.regressionPlot) {
+                this.regressionPlot.update(ScatterPlot.DOMAIN, plotSelection);
+            }
+            this.drawCanvas(false);
+            // Zoom for distribution plots
+            if (this.xDistribPlot && this.distribVisibility) {
+                this.xDistribPlot.valuesScale.domain(this.xScale.domain());
+                this.xDistribPlot.update(ScatterPlot.DOMAIN, plotSelection.select(".distribGroup"));
+            }
+            if (this.yDistribPlot && this.distribVisibility) {
+                this.yDistribPlot.valuesScale.domain(this.yScale.domain());
+                this.yDistribPlot.update(ScatterPlot.DOMAIN, plotSelection.select(".distribGroup"));
+            }
+            // Vertical violin plots
+            if (this.xColumn.categories) {
+                const xCategories = this.xColumn.categories;
+                const fullXScale = d3.scaleLinear()
+                    .range(this.xScale.range())
+                    .domain(this.xColumn.domain());
+                plotSelection.selectAll(".ver.violinGroup").each(function (violinPlot, i) {
+                    const violinRange = ScatterPlot.verViolinRange(fullXScale, i, xCategories.length);
+                    if (brushZone) {
+                        const range = violinRange.map(fullXScale.invert).map(thisPlot.xScale).map(ScatterPlot.undef2Nan);
+                        violinPlot.distribScaleRange(range);
+                    }
+                    else {
+                        violinPlot.distribScaleRange(violinRange);
+                    }
+                    violinPlot.valuesScale.domain(thisPlot.yScale.domain());
+                    violinPlot.update(ScatterPlot.DOMAIN, d3.select(this));
+                });
+            }
+            // Horizontal violin plots
+            if (this.yColumn.categories) {
+                const yCategories = this.yColumn.categories;
+                const fullYScale = d3.scaleLinear()
+                    .range(this.yScale.range())
+                    .domain(this.yColumn.domain());
+                plotSelection.selectAll(".hor.violinGroup").each(function (violinPlot, i) {
+                    const violinRange = ScatterPlot.horViolinRange(fullYScale, i, yCategories.length);
+                    if (brushZone) {
+                        const range = violinRange.map(fullYScale.invert).map(thisPlot.yScale).map(ScatterPlot.undef2Nan);
+                        violinPlot.distribScaleRange(range);
+                    }
+                    else {
+                        violinPlot.distribScaleRange(violinRange);
+                    }
+                    violinPlot.valuesScale.domain(thisPlot.xScale.domain());
+                    violinPlot.update(ScatterPlot.DOMAIN, d3.select(this));
+                });
+            }
+        }
+        zoomBrushClass() {
+            return "zoombrush_plot" + this.index;
         }
         distribRepChange(newType) {
             this.distribType = newType;
@@ -3881,7 +4083,6 @@ var spm;
             this.regressionType = newType;
             const plotSelection = this.plotSelection();
             this.drawRegressionPlots(ScatterPlot.SHAPE, plotSelection);
-            this.drawCanvas(false, plotSelection);
         }
         static undef2Nan(value) {
             return typeof value === "undefined" ? NaN : value;
@@ -3910,26 +4111,23 @@ var spm;
         canvasSelector(picking) {
             return this.bindto + " .canvas" + this.index + (picking ? ".picking" : ".drawing");
         }
-        // eslint-disable-next-line max-lines-per-function
-        drawCanvas(picking, plotSelection) {
+        drawCanvas(picking) {
             this.pickingReady = picking;
             const canvasSelector = this.canvasSelector(picking);
-            let canvasSelection = d3.select(canvasSelector);
-            if (canvasSelection.empty()) {
-                canvasSelection = d3.select(this.bindto + " .MultiPlot").append("canvas")
+            let canvas = d3.select(canvasSelector);
+            if (canvas.empty()) {
+                canvas = d3.select(this.bindto + " .MultiPlot .canvasGroup" + this.index + (picking ? ".picking" : ".drawing") + " div").append("xhtml:canvas")
                     .attr("class", "canvas" + this.index + (picking ? " picking" : " drawing"));
                 if (picking) {
-                    canvasSelection.style("display", "none");
+                    canvas.style("display", "none");
                 }
             }
             const xScaleRange = this.xScale.range();
             const yScaleRange = this.yScale.range();
-            canvasSelection
+            canvas
                 .attr("width", xScaleRange[1] - xScaleRange[0])
-                .attr("height", yScaleRange[0] - yScaleRange[1])
-                .style("left", this.xPlot + "px")
-                .style("top", this.yPlot + "px");
-            const canvasNode = canvasSelection.node();
+                .attr("height", yScaleRange[0] - yScaleRange[1]);
+            const canvasNode = canvas.node();
             if (!canvasNode) {
                 console.error("canvasNode is null");
                 return;
@@ -3940,10 +4138,7 @@ var spm;
                 return;
             }
             context2d.clearRect(0, 0, this.width, this.height);
-            new spm.PointsPlot(this).drawCanvas(picking, plotSelection);
-            if (this.regressionPlot && !picking) {
-                this.regressionPlot.drawCanvas();
-            }
+            new spm.PointsPlot(this).drawCanvas(picking);
         }
         canvasMousemove(coords) {
             if (!this.pickingReady) {
@@ -3952,7 +4147,7 @@ var spm;
             const canvasSelector = this.canvasSelector(true);
             const canvasNode = d3.select(canvasSelector).node();
             if (!canvasNode) {
-                console.error("canvasNode is null");
+                console.error("canvasNode is null for:", canvasSelector);
                 return;
             }
             const context2d = canvasNode.getContext("2d");
@@ -3970,24 +4165,20 @@ var spm;
                 this.canvasMouseout();
             }
             else if (code < this.spData.sampleData.length) {
-                this.spData.setHlPoint(code);
-                new spm.PointsPlot(this).mouseover(this.spData.sampleData[code], code);
+                this.spData.dispatchHlPointEvent({ rowIndex: code, scatterPlot: this });
             }
         }
         canvasMouseout() {
-            this.spData.setHlPoint(null);
-            new spm.PointsPlot(this).mouseout();
+            this.spData.dispatchHlPointEvent({ rowIndex: null, scatterPlot: this });
         }
     }
     ScatterPlot.padding = { r: 10, t: 10 };
-    // static readonly padding = { l: 30, r: 10, b: 30, t: 10 };
     ScatterPlot.DISTRIB_RATIO = 0.15;
     ScatterPlot.margin = { l: 60, r: 10, b: 50, t: 5 };
     ScatterPlot.cslRight = 30;
     ScatterPlot.cslLeft = 10;
     ScatterPlot.cslWidth = 20;
     ScatterPlot.cslTotalWidth = ScatterPlot.cslRight + ScatterPlot.cslLeft + ScatterPlot.cslWidth;
-    ScatterPlot.pointRadius = 2;
     ScatterPlot.INIT = 1;
     ScatterPlot.SHAPE = 1 << 1;
     ScatterPlot.PALETTE = 1 << 2;
@@ -4015,20 +4206,24 @@ var spm;
             // RegressionPlot.LOESS_REP |
             // RegressionPlot.LINEAR_REP;
             this.corrPlotType = 
+            // CorrPlot.EMPTY;
             // CorrPlot.TEXT;
+            // CorrPlot.ABS_TEXT_REP;
             spm.CorrPlot.CIRCLES_REP;
             this.continuousCsId = spm.SpConst.CONTINUOUS_CS_IDS[0];
             this.categoricalCsId = spm.SpConst.CATEGORIAL_CS_IDS[0];
-            this.corrPlotCsId = spm.SpConst.CONTINUOUS_CS_IDS[3];
+            this.corrPlotCsId = spm.SpConst.CONTINUOUS_CS_IDS[0];
             this.dispatch = d3.dispatch(ScatterPlotMatrix.PLOT_EVENT);
             this.scatterPlotList = [];
             this.diagPlotList = [];
             this.corrPlotList = [];
             this.brushSlidersLinked = true;
-            this.visibleDimsCount = 0;
-            this.xVisibleDimIndex0 = 0;
-            this.yVisibleDimIndex0 = 0;
+            this.defaultVisibleDimCount = 0;
+            this.visibleDimCount = 0;
+            this.xStartingDimIndex = 0;
+            this.yStartingDimIndex = 0;
             this.bindto = "#" + id;
+            this.style = new spm.Style(this.bindto);
             this.setSize(width, height);
         }
         resize(width, height) {
@@ -4057,13 +4252,51 @@ var spm;
         id() {
             return this.bindto.substring(1);
         }
+        initSlidersPosition(config) {
+            if (config.slidersPosition) {
+                if (typeof config.slidersPosition.dimCount !== "number"
+                    || config.slidersPosition.dimCount > ScatterPlotMatrix.MAX_VISIBLE_DIMS) {
+                    config.slidersPosition.dimCount = ScatterPlotMatrix.DEFAULT_SLIDERS_POSITION.dimCount;
+                }
+                if (typeof config.slidersPosition.xStartingDimIndex !== "number") {
+                    config.slidersPosition.xStartingDimIndex = ScatterPlotMatrix.DEFAULT_SLIDERS_POSITION.xStartingDimIndex;
+                }
+                if (typeof config.slidersPosition.yStartingDimIndex !== "number") {
+                    config.slidersPosition.yStartingDimIndex = ScatterPlotMatrix.DEFAULT_SLIDERS_POSITION.yStartingDimIndex;
+                }
+            }
+            else {
+                config.slidersPosition = ScatterPlotMatrix.DEFAULT_SLIDERS_POSITION;
+            }
+            this.defaultVisibleDimCount = config.slidersPosition.dimCount;
+            if (this.spData.dimensions.length < this.defaultVisibleDimCount) {
+                this.visibleDimCount = this.spData.dimensions.length;
+            }
+            else {
+                this.visibleDimCount = this.defaultVisibleDimCount;
+            }
+            if (config.slidersPosition.xStartingDimIndex > this.spData.dimensions.length - this.visibleDimCount) {
+                this.xStartingDimIndex = this.spData.dimensions.length - this.visibleDimCount;
+            }
+            else {
+                this.xStartingDimIndex = config.slidersPosition.xStartingDimIndex;
+            }
+            if (config.slidersPosition.yStartingDimIndex > this.spData.dimensions.length - this.visibleDimCount) {
+                this.yStartingDimIndex = this.spData.dimensions.length - this.visibleDimCount;
+            }
+            else {
+                this.yStartingDimIndex = config.slidersPosition.yStartingDimIndex;
+            }
+            this.brushSlidersLinked = this.xStartingDimIndex === this.yStartingDimIndex;
+        }
         generate(config) {
             if (d3.select(this.bindto).empty()) {
                 throw new Error("'bindto' dom element not found:" + this.bindto);
             }
-            this.visibleDimsCount = 8;
-            this.brushSlidersLinked = true;
+            this.zColumn = null;
+            this.style.initWith(config.cssRules, config.plotProperties);
             this.initData(config);
+            this.initSlidersPosition(config);
             this.initTilePlots();
             this.setZAxis(config.zAxisDim, true);
             this.buildMainDomElements(config);
@@ -4078,6 +4311,7 @@ var spm;
             this.appendMouseModeSelect();
             this.initRegressionCB();
             this.spData.on(spm.SpData.HL_GRAPH_EVENT, ScatterPlotMatrix.prototype.hlGraph.bind(this));
+            this.spData.on(spm.SpData.HL_POINT_EVENT, ScatterPlotMatrix.prototype.hlPoint.bind(this));
             this.updatePlots(spm.ScatterPlot.INIT);
             this.xBrushSlider.update();
             this.yBrushSlider.update();
@@ -4095,8 +4329,8 @@ var spm;
             });
             if (targetPlot !== null) {
                 const thisMPlot = this;
-                const targetPlotXDimIndex = thisMPlot.xVisibleDimIndex0 + targetPlot.col;
-                const targetPlotYDimIndex = thisMPlot.yVisibleDimIndex0 + targetPlot.row;
+                const targetPlotXDimIndex = thisMPlot.xStartingDimIndex + targetPlot.col;
+                const targetPlotYDimIndex = thisMPlot.yStartingDimIndex + targetPlot.row;
                 [
                     [targetPlotXDimIndex, targetPlotXDimIndex],
                     [targetPlotXDimIndex, targetPlotYDimIndex],
@@ -4104,24 +4338,32 @@ var spm;
                     [targetPlotYDimIndex, targetPlotXDimIndex]
                 ].forEach(function (plotCoord) {
                     thisMPlot.scatterPlotList.forEach(plot => {
-                        if (thisMPlot.xVisibleDimIndex0 + plot.col === plotCoord[0]
-                            && thisMPlot.yVisibleDimIndex0 + plot.row === plotCoord[1]) {
+                        if (thisMPlot.xStartingDimIndex + plot.col === plotCoord[0]
+                            && thisMPlot.yStartingDimIndex + plot.row === plotCoord[1]) {
                             plot.hlGraph(true);
                         }
                     });
                     thisMPlot.diagPlotList.forEach(plot => {
-                        if (thisMPlot.xVisibleDimIndex0 + plot.col === plotCoord[0]
-                            && thisMPlot.yVisibleDimIndex0 + plot.row === plotCoord[1]) {
+                        if (thisMPlot.xStartingDimIndex + plot.col === plotCoord[0]
+                            && thisMPlot.yStartingDimIndex + plot.row === plotCoord[1]) {
                             plot.hlGraph(true);
                         }
                     });
                     thisMPlot.corrPlotList.forEach(plot => {
-                        if (thisMPlot.xVisibleDimIndex0 + plot.col === plotCoord[0]
-                            && thisMPlot.yVisibleDimIndex0 + plot.row === plotCoord[1]) {
+                        if (thisMPlot.xStartingDimIndex + plot.col === plotCoord[0]
+                            && thisMPlot.yStartingDimIndex + plot.row === plotCoord[1]) {
                             plot.hlGraph(true);
                         }
                     });
                 });
+            }
+        }
+        hlPoint(hlEvent) {
+            if (hlEvent.rowIndex === null) {
+                new spm.PointsPlot(hlEvent.scatterPlot).mouseout();
+            }
+            else {
+                new spm.PointsPlot(hlEvent.scatterPlot).mouseover(this.spData.sampleData[hlEvent.rowIndex], hlEvent.rowIndex, this.scatterPlotList);
             }
         }
         on(type, callback) {
@@ -4137,7 +4379,7 @@ var spm;
                 this.continuousCsId = config.continuousCS;
             }
             else {
-                console.log("Unknown continuous color scale: " + config.continuousCS);
+                console.error("Unknown continuous color scale: " + config.continuousCS);
             }
             if (!config.categoricalCS) {
                 this.categoricalCsId = spm.SpConst.CATEGORIAL_CS_IDS[0];
@@ -4146,7 +4388,7 @@ var spm;
                 this.categoricalCsId = config.categoricalCS;
             }
             else {
-                console.log("Unknown categorical color scale: " + config.categoricalCS);
+                console.error("Unknown categorical color scale: " + config.categoricalCS);
             }
             if (!config.distribType) {
                 this.distribType = 2;
@@ -4155,7 +4397,7 @@ var spm;
                 this.distribType = config.distribType;
             }
             else {
-                console.log("Unknown distribType: " + config.distribType);
+                console.error("Unknown distribType: " + config.distribType);
             }
             if (!config.regressionType) {
                 this.regressionType = 0;
@@ -4164,47 +4406,54 @@ var spm;
                 this.regressionType = config.regressionType;
             }
             else {
-                console.log("Unknown regressionType: " + config.regressionType);
+                console.error("Unknown regressionType: " + config.regressionType);
             }
             if (!config.corrPlotType) {
                 this.corrPlotType = spm.CorrPlot.CIRCLES_REP;
             }
-            else if ([spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP].includes(config.corrPlotType)) {
+            else if ([spm.CorrPlot.EMPTY_REP, spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP, spm.CorrPlot.ABS_TEXT_REP].includes(config.corrPlotType)) {
                 this.corrPlotType = config.corrPlotType;
             }
             else {
-                console.log("Unknown correlation plot type: " + config.corrPlotType);
+                console.error("Unknown correlation plot type: " + config.corrPlotType);
             }
-            if (!config.corrPlotCS) {
-                this.corrPlotCsId = spm.SpConst.CONTINUOUS_CS_IDS[3];
+            if (this.corrPlotType === spm.CorrPlot.TEXT_REP) {
+                this.corrPlotCsId = spm.SpConst.CONTINUOUS_CS_IDS[21]; // RdBu
             }
-            else if (spm.SpConst.CONTINUOUS_CS_IDS.includes(config.corrPlotCS)) {
-                this.corrPlotCsId = config.corrPlotCS;
+            else if (this.corrPlotType === spm.CorrPlot.ABS_TEXT_REP) {
+                this.corrPlotCsId = spm.SpConst.CONTINUOUS_CS_IDS[8]; // Blues
             }
-            else {
-                console.log("Unknown correlation color scale: " + config.corrPlotCS);
+            if (config.corrPlotCS) {
+                if (spm.SpConst.CONTINUOUS_CS_IDS.includes(config.corrPlotCS)) {
+                    this.corrPlotCsId = config.corrPlotCS;
+                }
+                else {
+                    console.error("Unknown correlation color scale: " + config.corrPlotCS);
+                }
             }
             this.rotateTitle = config.rotateTitle ? config.rotateTitle : false;
             this.spData = new spm.SpData(config);
-            this.initVisibleDimensions();
-            this.spData.initFromRowFilter(this.scatterPlotList);
+            this.spData.updateCutRowsMask();
             this.spData.on(spm.SpData.ROW_FILTER_EVENT, ScatterPlotMatrix.prototype.rowFilterChange.bind(this));
         }
-        initVisibleDimensions() {
-            if (this.spData.dimensions.length < this.visibleDimsCount) {
-                this.visibleDimsCount = this.spData.dimensions.length;
+        adjustVisibleDimensions() {
+            if (this.spData.dimensions.length < this.defaultVisibleDimCount) {
+                this.visibleDimCount = this.spData.dimensions.length;
             }
-            this.xVisibleDimIndex0 = 0;
-            this.yVisibleDimIndex0 = 0;
+            else {
+                this.visibleDimCount = this.defaultVisibleDimCount;
+            }
+            this.xStartingDimIndex = 0;
+            this.yStartingDimIndex = 0;
         }
         initTilePlots() {
             this.scatterPlotList.splice(0, this.scatterPlotList.length);
             this.diagPlotList.splice(0, this.diagPlotList.length);
             this.corrPlotList.splice(0, this.corrPlotList.length);
-            for (let j = 0; j < this.visibleDimsCount; j++) {
-                for (let i = 0; i < this.visibleDimsCount; i++) {
-                    const xVisibleDimIndex = this.xVisibleDimIndex0 + i;
-                    const yVisibleDimIndex = this.yVisibleDimIndex0 + j;
+            for (let j = 0; j < this.visibleDimCount; j++) {
+                for (let i = 0; i < this.visibleDimCount; i++) {
+                    const xVisibleDimIndex = this.xStartingDimIndex + i;
+                    const yVisibleDimIndex = this.yStartingDimIndex + j;
                     if (xVisibleDimIndex < yVisibleDimIndex) {
                         this.pushNewSP(i, j);
                     }
@@ -4218,7 +4467,7 @@ var spm;
             }
         }
         rowFilterChange() {
-            this.spData.initFromRowFilter(this.scatterPlotList);
+            this.spData.updateCutRowsMask();
             this.scatterPlotList.forEach(plot => {
                 const plotSelection = plot.plotSelection();
                 plot.drawRegressionPlots(spm.ScatterPlot.DOMAIN, plotSelection);
@@ -4226,12 +4475,14 @@ var spm;
                 plot.drawVerViolinPlots(spm.ScatterPlot.DOMAIN, plotSelection);
                 plot.drawHorViolinPlots(spm.ScatterPlot.DOMAIN, plotSelection);
                 if (plotSelection.size() !== 0) {
-                    plot.drawCanvas(false, plotSelection);
+                    plot.drawCanvas(false);
                 }
             });
             this.diagPlotList.forEach(plot => {
                 const plotSelection = plot.plotSelection();
-                plot.drawDistribPlots(spm.ScatterPlot.DOMAIN, plotSelection);
+                plot.drawDistribPlots(spm.DiagPlot.DOMAIN, plotSelection);
+                plot.updateYScaleDomain();
+                plot.drawYAxis(spm.DiagPlot.DOMAIN, plotSelection);
             });
             this.corrPlotList.forEach(plot => {
                 plot.draw(spm.ScatterPlot.DOMAIN);
@@ -4240,7 +4491,7 @@ var spm;
         pushNewSP(i, j) {
             const scatterPlot = new spm.ScatterPlot(this.spData, {
                 bindto: this.bindto,
-                index: i + this.visibleDimsCount * j,
+                index: i + this.visibleDimCount * j,
                 row: j,
                 col: i,
                 regressionType: this.regressionType,
@@ -4253,20 +4504,21 @@ var spm;
                 corrPlotCsId: this.corrPlotCsId,
                 axisVisibility: {
                     xTitle: false,
-                    xValues: j === this.visibleDimsCount - 1,
+                    xValues: j === this.visibleDimCount - 1,
                     yTitle: false,
                     yValues: i === 0
-                }
+                },
+                style: this.style
             });
-            scatterPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xVisibleDimIndex0 + i]]);
-            scatterPlot.setYColumn(this.spData.columns[this.spData.dimensions[this.yVisibleDimIndex0 + j]]);
+            scatterPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xStartingDimIndex + i]]);
+            scatterPlot.setYColumn(this.spData.columns[this.spData.dimensions[this.yStartingDimIndex + j]]);
             scatterPlot.setZColumn(this.getZColumn());
             this.scatterPlotList.push(scatterPlot);
         }
         pushNewDP(i, j) {
             const diagPlot = new spm.DiagPlot(this.spData, {
                 bindto: this.bindto,
-                index: i + this.visibleDimsCount * j,
+                index: i + this.visibleDimCount * j,
                 row: j,
                 col: i,
                 regressionType: this.regressionType,
@@ -4279,19 +4531,20 @@ var spm;
                 corrPlotCsId: this.corrPlotCsId,
                 axisVisibility: {
                     xTitle: false,
-                    xValues: j === this.visibleDimsCount - 1,
+                    xValues: j === this.visibleDimCount - 1,
                     yTitle: false,
                     yValues: i === 0
-                }
+                },
+                style: this.style
             });
-            diagPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xVisibleDimIndex0 + i]]);
+            diagPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xStartingDimIndex + i]]);
             diagPlot.setZColumn(this.getZColumn());
             this.diagPlotList.push(diagPlot);
         }
         pushNewCP(i, j) {
             const corrPlot = new spm.CorrPlot(this.spData, {
                 bindto: this.bindto,
-                index: i + this.visibleDimsCount * j,
+                index: i + this.visibleDimCount * j,
                 row: j,
                 col: i,
                 regressionType: this.regressionType,
@@ -4307,10 +4560,11 @@ var spm;
                     xValues: true,
                     yTitle: true,
                     yValues: true
-                }
+                },
+                style: this.style
             });
-            corrPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xVisibleDimIndex0 + i]]);
-            corrPlot.setYColumn(this.spData.columns[this.spData.dimensions[this.yVisibleDimIndex0 + j]]);
+            corrPlot.setXColumn(this.spData.columns[this.spData.dimensions[this.xStartingDimIndex + i]]);
+            corrPlot.setYColumn(this.spData.columns[this.spData.dimensions[this.yStartingDimIndex + j]]);
             corrPlot.setZColumn(this.getZColumn());
             this.corrPlotList.push(corrPlot);
         }
@@ -4388,12 +4642,13 @@ var spm;
         updateVisibleDimensions(begin, end, xOriented) {
             if (begin !== undefined && end !== undefined && begin >= 0 && end >= 0) {
                 if (xOriented || this.brushSlidersLinked) {
-                    this.xVisibleDimIndex0 = begin;
+                    this.xStartingDimIndex = begin;
                 }
                 if (!xOriented || this.brushSlidersLinked) {
-                    this.yVisibleDimIndex0 = begin;
+                    this.yStartingDimIndex = begin;
                 }
-                this.visibleDimsCount = end - begin + 1;
+                this.visibleDimCount = end - begin + 1;
+                this.defaultVisibleDimCount = this.visibleDimCount;
                 this.tilesNumberChanged();
             }
         }
@@ -4406,8 +4661,8 @@ var spm;
         updatePlots(updateType) {
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
-            const tileWidth = (this.width / thisMPlot.visibleDimsCount);
-            const tileHeight = (this.height / thisMPlot.visibleDimsCount);
+            const tileWidth = (this.width / thisMPlot.visibleDimCount);
+            const tileHeight = (this.height / thisMPlot.visibleDimCount);
             if (updateType & (spm.ScatterPlot.INIT | spm.ScatterPlot.RANGE)) {
                 this.scatterPlotList.forEach(plot => {
                     plot.height = tileHeight;
@@ -4415,7 +4670,7 @@ var spm;
                 });
                 this.diagPlotList.forEach(plot => {
                     plot.height = tileHeight;
-                    plot.hidth = tileWidth;
+                    plot.width = tileWidth;
                 });
                 this.corrPlotList.forEach(plot => {
                     plot.height = tileHeight;
@@ -4480,6 +4735,7 @@ var spm;
             mspGroup.selectAll(".cslGroup").style("display", "none");
             if (updateType & spm.ScatterPlot.INIT) {
                 this.fixBrush();
+                this.style.applyCssRules();
             }
         }
         initColHeaders() {
@@ -4491,15 +4747,15 @@ var spm;
         initTopHeaders() {
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
-            const tileWidth = (this.width / thisMPlot.visibleDimsCount);
+            const tileWidth = (this.width / thisMPlot.visibleDimCount);
             mspGroup.selectAll(".topHeader")
-                .data(d3.range(this.visibleDimsCount))
+                .data(d3.range(this.visibleDimCount))
                 .join(enter => enter.append("text")
                 .attr("class", "topHeader Header")
                 .on("click", ScatterPlotMatrix.prototype.clickColTitle.bind(thisMPlot)), update => update, exit => exit.remove())
-                .classed("input", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]].isInput(); })
-                .classed("output", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]].isOutput(); })
-                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn !== null && thisMPlot.zColumn.dimIndex === thisMPlot.xVisibleDimIndex0 + colIndex; })
+                .classed("input", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]].isInput(); })
+                .classed("output", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]].isOutput(); })
+                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn === thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]; })
                 .attr("transform", function (colIndex) {
                 if (thisMPlot.rotateTitle) {
                     return `translate(${tileWidth * (colIndex + 0.3)}, -10)rotate(-10)`;
@@ -4509,7 +4765,7 @@ var spm;
                 }
             })
                 .each(function (colIndex) {
-                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]]);
+                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]);
             })
                 // @ts-ignore
                 .attr("text-anchor", thisMPlot.rotateTitle ? null : "middle");
@@ -4517,15 +4773,15 @@ var spm;
         initRightHeaders() {
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
-            const tileHeight = (this.height / thisMPlot.visibleDimsCount);
+            const tileHeight = (this.height / thisMPlot.visibleDimCount);
             mspGroup.selectAll(".rightHeader")
-                .data(d3.range(this.visibleDimsCount))
+                .data(d3.range(this.visibleDimCount))
                 .join(enter => enter.append("text")
                 .attr("class", "rightHeader Header")
                 .on("click", ScatterPlotMatrix.prototype.clickRowTitle.bind(thisMPlot)), update => update, exit => exit.remove())
-                .classed("input", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]].isInput(); })
-                .classed("output", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]].isOutput(); })
-                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn !== null && thisMPlot.zColumn.dimIndex === thisMPlot.xVisibleDimIndex0 + colIndex; })
+                .classed("input", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]].isInput(); })
+                .classed("output", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]].isOutput(); })
+                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn === thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]; })
                 .attr("transform", function (rowIndex) {
                 if (thisMPlot.rotateTitle) {
                     return `translate(${thisMPlot.width + 10}, ${tileHeight * (rowIndex + 0.3)})rotate(80)`;
@@ -4535,7 +4791,7 @@ var spm;
                 }
             })
                 .each(function (rowIndex) {
-                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]]);
+                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]]);
             })
                 // @ts-ignore
                 .attr("text-anchor", thisMPlot.rotateTitle ? null : "middle");
@@ -4543,15 +4799,15 @@ var spm;
         initBottomHeaders() {
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
-            const tileWidth = (this.width / thisMPlot.visibleDimsCount);
+            const tileWidth = (this.width / thisMPlot.visibleDimCount);
             mspGroup.selectAll(".bottomHeader")
-                .data(d3.range(this.visibleDimsCount))
+                .data(d3.range(this.visibleDimCount))
                 .join(enter => enter.append("text")
                 .attr("class", "bottomHeader Header")
                 .on("click", ScatterPlotMatrix.prototype.clickColTitle.bind(thisMPlot)), update => update, exit => exit.remove())
-                .classed("input", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]].isInput(); })
-                .classed("output", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]].isOutput(); })
-                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn !== null && thisMPlot.zColumn.dimIndex === thisMPlot.xVisibleDimIndex0 + colIndex; })
+                .classed("input", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]].isInput(); })
+                .classed("output", function (colIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]].isOutput(); })
+                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn === thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]; })
                 .attr("transform", function (colIndex) {
                 if (thisMPlot.rotateTitle) {
                     return `translate(${tileWidth * (colIndex + 0.3)}, ${thisMPlot.height + 55})rotate(-10)`;
@@ -4561,7 +4817,7 @@ var spm;
                 }
             })
                 .each(function (colIndex) {
-                spm.ScatterPlot.tspanColumnTitleTB(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xVisibleDimIndex0 + colIndex]]);
+                spm.ScatterPlot.tspanColumnTitleTB(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]);
             })
                 // @ts-ignore
                 .attr("text-anchor", thisMPlot.rotateTitle ? null : "middle");
@@ -4569,15 +4825,15 @@ var spm;
         initLeftHeaders() {
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
-            const tileHeight = (this.height / thisMPlot.visibleDimsCount);
+            const tileHeight = (this.height / thisMPlot.visibleDimCount);
             mspGroup.selectAll(".leftHeader")
-                .data(d3.range(this.visibleDimsCount))
+                .data(d3.range(this.visibleDimCount))
                 .join(enter => enter.append("text")
                 .attr("class", "leftHeader Header")
                 .on("click", ScatterPlotMatrix.prototype.clickRowTitle.bind(thisMPlot)), update => update, exit => exit.remove())
-                .classed("input", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]].isInput(); })
-                .classed("output", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]].isOutput(); })
-                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn !== null && thisMPlot.zColumn.dimIndex === thisMPlot.xVisibleDimIndex0 + colIndex; })
+                .classed("input", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]].isInput(); })
+                .classed("output", function (rowIndex) { return thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]].isOutput(); })
+                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn === thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]; })
                 .attr("transform", function (rowIndex) {
                 if (thisMPlot.rotateTitle) {
                     return `translate(-55, ${tileHeight * (rowIndex + 0.8)})rotate(260)`;
@@ -4587,13 +4843,13 @@ var spm;
                 }
             })
                 .each(function (rowIndex) {
-                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yVisibleDimIndex0 + rowIndex]]);
+                spm.ScatterPlot.tspanColumnTitleBT(d3.select(this), thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.yStartingDimIndex + rowIndex]]);
             })
                 // @ts-ignore
                 .attr("text-anchor", thisMPlot.rotateTitle ? null : "middle");
         }
         clickColTitle(colIndex) {
-            const dim = this.spData.dimensions[this.xVisibleDimIndex0 + colIndex];
+            const dim = this.spData.dimensions[this.xStartingDimIndex + colIndex];
             if (this.zColumn !== null && this.zColumn.dim === dim) {
                 this.setZAxis(null);
             }
@@ -4603,7 +4859,7 @@ var spm;
             this.updateZAxisHeaders();
         }
         clickRowTitle(rowIndex) {
-            const dim = this.spData.dimensions[this.yVisibleDimIndex0 + rowIndex];
+            const dim = this.spData.dimensions[this.yStartingDimIndex + rowIndex];
             if (this.zColumn !== null && this.zColumn.dim === dim) {
                 this.setZAxis(null);
             }
@@ -4616,14 +4872,14 @@ var spm;
             const thisMPlot = this;
             const mspGroup = d3.select(this.bindto + " .MultiPlot .mspGroup");
             mspGroup.selectAll(".Header")
-                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn !== null && thisMPlot.zColumn.dimIndex === thisMPlot.xVisibleDimIndex0 + colIndex; });
+                .classed("zAxis", function (colIndex) { return thisMPlot.zColumn === thisMPlot.spData.columns[thisMPlot.spData.dimensions[thisMPlot.xStartingDimIndex + colIndex]]; });
         }
         xSubPlot(plot) {
-            const tileWidth = (this.width / this.visibleDimsCount);
+            const tileWidth = (this.width / this.visibleDimCount);
             return plot.col * tileWidth /* + ScatterPlot.margin.l*/;
         }
         ySubPlot(plot) {
-            const tileHeight = (this.height / this.visibleDimsCount);
+            const tileHeight = (this.height / this.visibleDimCount);
             return plot.row * tileHeight /* + ScatterPlot.margin.t*/;
         }
         //***********************************
@@ -4781,7 +5037,7 @@ var spm;
         }
         appendCorrTypeSelect() {
             const thisMPlot = this;
-            const corrPlotTypes = [spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP];
+            const corrPlotTypes = [spm.CorrPlot.EMPTY_REP, spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP, spm.CorrPlot.ABS_TEXT_REP];
             d3.select(this.bindto + " .corrTypeSelect").append("select")
                 .on("change", function () {
                 const corrPlotType = corrPlotTypes[this.selectedIndex];
@@ -4818,7 +5074,13 @@ var spm;
         // eslint-disable-next-line max-lines-per-function
         setZAxis(dim, dontRedraw) {
             if (dim && !this.spData.columns[dim]) {
-                console.log("setZAxis called with unknown dim:", dim);
+                console.error("setZAxis called with unknown dim:", dim);
+                return;
+            }
+            const zAxisDim = this.zColumn === null
+                ? null
+                : this.zColumn.dim;
+            if (dim === zAxisDim) {
                 return;
             }
             const thisMPlot = this;
@@ -4858,16 +5120,22 @@ var spm;
                     }
                 }
             });
-            d3.select(`#${this.id()}_zAxisUsed`).property("checked", this.zColumn !== null);
-            if (this.zColumn !== null) {
-                const zAxisSelectNode = d3.select(this.bindto + " .ParamSelect.ZAxis>select").node();
-                if (zAxisSelectNode) {
-                    const selectedIndex = this.spData.dimensions.indexOf(this.zColumn.dim);
-                    if (selectedIndex === -1) {
-                        console.log("Dim of Z axis not found => selectedIndex cannot be updated");
-                    }
-                    else {
-                        zAxisSelectNode.selectedIndex = selectedIndex;
+            this.dispatch.call(ScatterPlotMatrix.PLOT_EVENT, undefined, {
+                type: ScatterPlotMatrix.ZAXIS_EVENT,
+                value: dim
+            });
+            if (d3.select(this.bindto + " .mspDiv.withWidgets").size() !== 0) {
+                d3.select(`#${this.id()}_zAxisUsed`).property("checked", this.zColumn !== null);
+                if (this.zColumn !== null) {
+                    const zAxisSelectNode = d3.select(this.bindto + " .ParamSelect.ZAxis>select").node();
+                    if (zAxisSelectNode) {
+                        const selectedIndex = this.spData.dimensions.indexOf(this.zColumn.dim);
+                        if (selectedIndex === -1) {
+                            console.warn("Dim of Z axis not found => selectedIndex cannot be updated");
+                        }
+                        else {
+                            zAxisSelectNode.selectedIndex = selectedIndex;
+                        }
                     }
                 }
             }
@@ -4883,7 +5151,7 @@ var spm;
                 });
             }
             else {
-                console.log("Invalid distribution type code: " + distribType);
+                console.error("Invalid distribution type code: " + distribType);
             }
         }
         setRegressionType(regressionType) {
@@ -4894,7 +5162,7 @@ var spm;
                 });
             }
             else {
-                console.log("Invalid regression type code: " + regressionType);
+                console.error("Invalid regression type code: " + regressionType);
             }
         }
         setContinuousColorScale(continuousCsId) {
@@ -4909,7 +5177,7 @@ var spm;
                 this.updatePlots(spm.ScatterPlot.PALETTE);
             }
             else {
-                console.log("Unknown continuous color scale: " + continuousCsId);
+                console.error("Unknown continuous color scale: " + continuousCsId);
             }
         }
         setCategoricalColorScale(categoricalCsId) {
@@ -4927,11 +5195,11 @@ var spm;
                 this.updatePlots(spm.ScatterPlot.PALETTE);
             }
             else {
-                console.log("Unknown categorical color scale: " + categoricalCsId);
+                console.error("Unknown categorical color scale: " + categoricalCsId);
             }
         }
         setCorrPlotType(corrPlotType) {
-            if ([spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP].includes(corrPlotType)) {
+            if ([spm.CorrPlot.EMPTY_REP, spm.CorrPlot.CIRCLES_REP, spm.CorrPlot.TEXT_REP, spm.CorrPlot.ABS_TEXT_REP].includes(corrPlotType)) {
                 this.corrPlotType = corrPlotType;
                 this.corrPlotList.forEach(plot => {
                     plot.repType = corrPlotType;
@@ -4939,7 +5207,7 @@ var spm;
                 });
             }
             else {
-                console.log("Unknown correlation plot type: " + corrPlotType);
+                console.error("Unknown correlation plot type: " + corrPlotType);
             }
         }
         setCorrPlotCS(corrPlotCsId) {
@@ -4951,8 +5219,12 @@ var spm;
                 this.updatePlots(spm.ScatterPlot.PALETTE);
             }
             else {
-                console.log("Unknown correlation color scale: " + corrPlotCsId);
+                console.error("Unknown correlation color scale: " + corrPlotCsId);
             }
+        }
+        setCutoffs(spCutoffsList) {
+            this.spData.setCutoffs(spCutoffsList);
+            this.fixBrush();
         }
         setKeptColumns(keptColumns) {
             const thisPlot = this;
@@ -4968,7 +5240,7 @@ var spm;
                     return toKeep;
                 });
             }
-            this.initVisibleDimensions();
+            this.adjustVisibleDimensions();
             this.tilesNumberChanged();
             this.xBrushSlider.update();
             this.yBrushSlider.update();
@@ -4990,10 +5262,10 @@ var spm;
             return {
                 data: [],
                 rowLabels: this.spData.rowLabels,
-                controlWidgets: controlWidgets,
                 categorical: categorical,
                 inputColumns: inputColumns,
                 keptColumns: keptColumns,
+                cutoffs: this.spData.getXYCutoffs(),
                 zAxisDim: zAxisDim,
                 distribType: this.distribType,
                 regressionType: this.regressionType,
@@ -5002,14 +5274,28 @@ var spm;
                 rotateTitle: this.rotateTitle,
                 columnLabels: columnLabels,
                 continuousCS: this.continuousCsId,
-                categoricalCS: this.categoricalCsId
+                categoricalCS: this.categoricalCsId,
+                controlWidgets: controlWidgets,
+                cssRules: this.style.cssRules,
+                plotProperties: this.style.plotProperties,
+                slidersPosition: {
+                    dimCount: this.visibleDimCount,
+                    xStartingDimIndex: this.xStartingDimIndex,
+                    yStartingDimIndex: this.yStartingDimIndex
+                }
             };
         }
     }
     ScatterPlotMatrix.margin = { t: 95, r: 95, b: 95, l: 95 };
     ScatterPlotMatrix.zAxisClass = "ZAxis";
     ScatterPlotMatrix.PLOT_EVENT = "plotEvent";
-    ScatterPlotMatrix.SELECTION_EVENT = "selectionChange";
+    ScatterPlotMatrix.ZAXIS_EVENT = "zAxisChange";
+    ScatterPlotMatrix.MAX_VISIBLE_DIMS = 16;
+    ScatterPlotMatrix.DEFAULT_SLIDERS_POSITION = {
+        dimCount: 8,
+        xStartingDimIndex: 0,
+        yStartingDimIndex: 0
+    };
     spm.ScatterPlotMatrix = ScatterPlotMatrix;
 })(spm || (spm = {}));
 // eslint-disable-next-line no-unused-vars
@@ -5141,7 +5427,7 @@ var spm;
             if (xAxisSelectNode) {
                 const selectedIndex = this.msp.spData.dimensions.indexOf(dim);
                 if (selectedIndex === -1) {
-                    console.log("Dim of X axis not found => selectedIndex cannot be updated");
+                    console.error("Dim of X axis not found => selectedIndex cannot be updated");
                 }
                 else {
                     xAxisSelectNode.selectedIndex = selectedIndex;
@@ -5153,7 +5439,7 @@ var spm;
             if (yAxisSelectNode) {
                 const selectedIndex = this.msp.spData.dimensions.indexOf(dim);
                 if (selectedIndex === -1) {
-                    console.log("Dim of Y axis not found => selectedIndex cannot be updated");
+                    console.error("Dim of Y axis not found => selectedIndex cannot be updated");
                 }
                 else {
                     yAxisSelectNode.selectedIndex = selectedIndex;
@@ -5165,7 +5451,13 @@ var spm;
             if (zAxisSelectNode) {
                 const selectedIndex = this.msp.spData.dimensions.indexOf(dim);
                 if (selectedIndex === -1) {
-                    console.log("Dim of Z axis not found => selectedIndex cannot be updated");
+                    const allDimensions = d3.keys(this.msp.spData.sampleData[0]);
+                    if (allDimensions.indexOf(dim) === -1) {
+                        console.error("Dim of Z axis not found => selectedIndex cannot be updated");
+                    }
+                    else {
+                        console.warn("Dim of Z axis not found => selectedIndex cannot be updated");
+                    }
                 }
                 else {
                     zAxisSelectNode.selectedIndex = selectedIndex;
@@ -5174,7 +5466,7 @@ var spm;
         }
         setXAxis(dim) {
             if (!this.msp.spData.columns[dim]) {
-                console.log("setXAxis called with unknown dim:", dim);
+                console.error("setXAxis called with unknown dim:", dim);
                 return;
             }
             const thisPad = this;
@@ -5189,7 +5481,7 @@ var spm;
         }
         setYAxis(dim) {
             if (!this.msp.spData.columns[dim]) {
-                console.log("setYAxis called with unknown dim:", dim);
+                console.error("setYAxis called with unknown dim:", dim);
                 return;
             }
             const thisPad = this;
@@ -5204,7 +5496,7 @@ var spm;
         }
         setZAxis(dim) {
             if (dim !== null && !this.msp.spData.columns[dim]) {
-                console.log("setZAxis called with unknown dim:", dim);
+                console.error("setZAxis called with unknown dim:", dim);
                 return;
             }
             const zColumn = dim === null
@@ -5219,9 +5511,11 @@ var spm;
                     plot.draw(spm.ScatterPlot.Z_AXIS);
                 }
             });
-            d3.select(`#${this.msp.id()}_zAxisUsed`).property("checked", zColumn !== null);
-            if (zColumn !== null) {
-                this.updateZSelector(zColumn.dim);
+            if (d3.select(this.msp.bindto + " .mspDiv.withWidgets").size() !== 0) {
+                d3.select(`#${this.msp.id()}_zAxisUsed`).property("checked", zColumn !== null);
+                if (zColumn !== null) {
+                    this.updateZSelector(zColumn.dim);
+                }
             }
         }
         sendSelectionEvent() {
@@ -5317,8 +5611,6 @@ var spm;
     };
     SpConst.mouseModeList = [SpConst.tooltipMouse, SpConst.filterMouse, SpConst.zoomMouse];
     SpConst.CAT_RATIO = 4;
-    SpConst.NO_CAT_COLOR = "#43665e";
-    SpConst.LIGHTER_NO_CAT_COLOR = "#69b3a2";
     spm.SpConst = SpConst;
 })(spm || (spm = {}));
 // eslint-disable-next-line no-unused-vars
@@ -5335,8 +5627,8 @@ var spm;
             this.jitterXValues = [];
             this.jitterYValues = [];
             this.cutRows = [];
-            this.highlightedPoint = null;
             this.dispatch = d3.dispatch(SpData.ROW_FILTER_EVENT, SpData.HL_POINT_EVENT, SpData.HL_GRAPH_EVENT);
+            this.rowFilterMap = new Map();
             this.rowLabels = config.rowLabels;
             const thisData = this;
             SpData.checkData(config);
@@ -5368,6 +5660,15 @@ var spm;
                 });
                 thisData.sampleData.push(curRow);
             });
+            // Init cutoffs
+            if (!this.checkCutoffs(config.cutoffs)) {
+                config.cutoffs = null;
+            }
+            if (Array.isArray(config.cutoffs)) {
+                config.cutoffs.forEach(spCutoffs => {
+                    this.setXYCutoffs(spCutoffs.xDim, spCutoffs.yDim, spCutoffs.xyCutoffs);
+                });
+            }
             // Build 'Column' instances and init jitter values
             const allDimensions = d3.keys(this.sampleData[0]);
             const nanColumns = allDimensions.map(dim => this.sampleData.every(row => isNaN(row[dim])));
@@ -5398,12 +5699,12 @@ var spm;
             if (config.categorical) {
                 if (Array.isArray(config.categorical)) {
                     if (config.categorical.length !== config.data.columns.length) {
-                        console.log("Length of 'categorical' must be equal to the number of columns of 'data'");
+                        console.error("Length of 'categorical' must be equal to the number of columns of 'data'");
                         config.categorical = null;
                     }
                 }
                 else {
-                    console.log("'categorical' must be an array");
+                    console.error("'categorical' must be an array");
                     config.categorical = null;
                 }
             }
@@ -5412,12 +5713,12 @@ var spm;
             if (config.columnLabels) {
                 if (Array.isArray(config.columnLabels)) {
                     if (config.columnLabels.length !== config.data.columns.length) {
-                        console.log("Length of 'columnLabels' must be equal to the number of columns of 'data'");
+                        console.error("Length of 'columnLabels' must be equal to the number of columns of 'data'");
                         config.columnLabels = null;
                     }
                 }
                 else {
-                    console.log("'columnLabels' must be an array");
+                    console.error("'columnLabels' must be an array");
                     config.columnLabels = null;
                 }
             }
@@ -5426,25 +5727,116 @@ var spm;
             if (config.inputColumns) {
                 if (Array.isArray(config.inputColumns)) {
                     if (config.inputColumns.length !== config.data.columns.length) {
-                        console.log("Length of 'inputColumns' must be equal to the number of columns of 'data'");
+                        console.error("Length of 'inputColumns' must be equal to the number of columns of 'data'");
                         config.inputColumns = null;
                     }
                 }
                 else {
-                    console.log("'inputColumns' must be an array");
+                    console.error("'inputColumns' must be an array");
                     config.inputColumns = null;
                 }
             }
         }
-        initFromRowFilter(scatterPlotList) {
+        checkCutoffs(cutoffs) {
+            if (cutoffs) {
+                if (Array.isArray(cutoffs)) {
+                    const allDimensions = d3.keys(this.sampleData[0]);
+                    for (let spcIndex = 0; spcIndex < cutoffs.length; spcIndex++) {
+                        const spCutoffs = cutoffs[spcIndex];
+                        if (typeof spCutoffs.xDim === "undefined") {
+                            console.error(`spCutoffs ${spcIndex} has no 'xDim' attribute`);
+                            return false;
+                        }
+                        if (allDimensions.indexOf(spCutoffs.xDim) === -1) {
+                            console.error(`spCutoffs ${spcIndex} has unknown 'xDim' attribute: ${spCutoffs.xDim}`);
+                            return false;
+                        }
+                        if (typeof spCutoffs.yDim === "undefined") {
+                            console.error(`spCutoffs ${spcIndex} has no 'yDim' attribute`);
+                            return false;
+                        }
+                        if (allDimensions.indexOf(spCutoffs.yDim) === -1) {
+                            console.error(`spCutoffs ${spcIndex} has unknown 'yDim' attribute: ${spCutoffs.yDim}`);
+                            return false;
+                        }
+                        if (typeof spCutoffs.xyCutoffs === "undefined") {
+                            console.error(`spCutoffs ${spcIndex} has no 'xyCutoffs' attribute`);
+                            return false;
+                        }
+                        if (!SpData.checkXYCutoffs(spCutoffs.xyCutoffs, spcIndex)) {
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    console.error("'cutoffs' must be an array");
+                    return false;
+                }
+            }
+            return true;
+        }
+        static checkXYCutoffs(xyCutoffs, spcIndex) {
+            if (Array.isArray(xyCutoffs)) {
+                for (let i = 0; i < xyCutoffs.length; i++) {
+                    const xyCutoff = xyCutoffs[i];
+                    if (Array.isArray(xyCutoff)) {
+                        if (!SpData.checkXYCutoff(xyCutoff, spcIndex)) {
+                            return false;
+                        }
+                    }
+                    else {
+                        console.error("cutoff with a non array 'xyCutoff' found");
+                        return false;
+                    }
+                }
+            }
+            else {
+                console.error(`spCutoffs ${spcIndex} has an invalid 'xyCutoffs' (not an array)`);
+                return false;
+            }
+            return true;
+        }
+        static checkXYCutoff(xyCutoff, spcIndex) {
+            if (xyCutoff.length === 2) {
+                for (let xyi = 0; xyi < xyCutoff.length; xyi++) {
+                    const cutoff = xyCutoff[xyi];
+                    if (Array.isArray(cutoff)) {
+                        if (!SpData.checkCutoff(cutoff, spcIndex, xyi)) {
+                            xyCutoff[xyi] = null;
+                        }
+                    }
+                    else if (cutoff) {
+                        console.error(`spCutoffs ${spcIndex} has an invalid 'cutoff' (not an array of length 2)`);
+                        return false;
+                    }
+                }
+            }
+            else {
+                console.error(`spCutoffs ${spcIndex} has an invalid 'xyCutoff' (length is not 2)`);
+                return false;
+            }
+            return true;
+        }
+        static checkCutoff(cutoff, spcIndex, xyi) {
+            if (cutoff.length !== 2) {
+                console.error(`spCutoffs ${spcIndex} has an invalid 'cutoff' (length is not 2)`);
+                return false;
+            }
+            else if (+cutoff[0] >= +cutoff[1]) {
+                console.error(`spCutoffs ${spcIndex} has an invalid 'cutoff' for ${xyi === 0 ? "X" : "Y"} (${cutoff[0]} >= ${+cutoff[1]})`);
+                return false;
+            }
+            return true;
+        }
+        updateCutRowsMask() {
             const thisData = this;
             if (this.cutRows.length !== this.sampleData.length) {
                 this.cutRows = new Array(this.sampleData.length);
             }
+            const rowFilterList = [...this.rowFilterMap.values()].reduce((accu, xmap) => accu.concat([...xmap.values()]), []);
             this.sampleData.forEach(function (row, i) {
-                const isKept = scatterPlotList.every(function (scatterPlot) {
-                    return scatterPlot.xRowFilter.isKeptRow(row)
-                        && scatterPlot.yRowFilter.isKeptRow(row);
+                const isKept = rowFilterList.every(function (rowFilter) {
+                    return rowFilter.isKeptRow(row);
                 });
                 thisData.cutRows[i] = isKept;
             });
@@ -5460,22 +5852,220 @@ var spm;
         rowFilterChange() {
             this.dispatch.call(SpData.ROW_FILTER_EVENT, undefined, SpData.ROW_FILTER_EVENT);
         }
-        getHlPoint() {
-            return this.highlightedPoint;
-        }
-        setHlPoint(hlPoint) {
-            this.highlightedPoint = hlPoint;
-            this.dispatch.call(SpData.HL_POINT_EVENT, undefined, SpData.HL_POINT_EVENT);
+        dispatchHlPointEvent(hlPointEvent) {
+            this.dispatch.call(SpData.HL_POINT_EVENT, undefined, hlPointEvent);
         }
         on(type, callback) {
             // @ts-ignore
             this.dispatch.on(type, callback);
+        }
+        setCutoffs(spCutoffsList) {
+            if (spCutoffsList) {
+                if (this.checkCutoffs(spCutoffsList)) {
+                    spCutoffsList.forEach(spCutoffs => {
+                        this.setXYCutoffs(spCutoffs.xDim, spCutoffs.yDim, spCutoffs.xyCutoffs);
+                    });
+                    this.rowFilterChange();
+                }
+            }
+            else {
+                this.rowFilterMap.clear();
+                this.rowFilterChange();
+            }
+        }
+        getRowFilter(xDim, yDim) {
+            let xMap = this.rowFilterMap.get(xDim);
+            if (!xMap) {
+                xMap = new Map;
+                this.rowFilterMap.set(xDim, xMap);
+            }
+            let rowFilter = xMap.get(yDim);
+            if (!rowFilter) {
+                rowFilter = new spm.RowFilter(xDim, yDim);
+                xMap.set(yDim, rowFilter);
+            }
+            return rowFilter;
+        }
+        setXYCutoffs(xDim, yDim, xyCutoffs) {
+            if (xyCutoffs) {
+                const [xMin, xMax] = d3.extent(this.sampleData, function (row) { return +row[xDim]; });
+                if (typeof xMin !== "undefined" && typeof xMax !== "undefined") {
+                    xyCutoffs.forEach(xyCutoff => {
+                        if (xyCutoff[0]) {
+                            if (xyCutoff[0][0] < xMin || xyCutoff[0][0] > xMax) {
+                                xyCutoff[0][0] = xMin;
+                            }
+                            if (xyCutoff[0][1] > xMax || xyCutoff[0][1] < xMin) {
+                                xyCutoff[0][1] = xMax;
+                            }
+                        }
+                        else {
+                            xyCutoff[0] = [xMin, xMax];
+                        }
+                    });
+                }
+                else {
+                    console.error("Wrong domain for ", xDim);
+                }
+                const [yMin, yMax] = d3.extent(this.sampleData, function (row) { return +row[yDim]; });
+                if (typeof yMin !== "undefined" && typeof yMax !== "undefined") {
+                    xyCutoffs.forEach(xyCutoff => {
+                        if (xyCutoff[1]) {
+                            if (xyCutoff[1][0] < yMin || xyCutoff[1][0] > yMax) {
+                                xyCutoff[1][0] = yMin;
+                            }
+                            if (xyCutoff[1][1] > yMax || xyCutoff[1][1] < yMin) {
+                                xyCutoff[1][1] = yMax;
+                            }
+                        }
+                        else {
+                            xyCutoff[1] = [yMin, yMax];
+                        }
+                    });
+                }
+                else {
+                    console.error("Wrong domain for ", yDim);
+                }
+            }
+            this.getRowFilter(xDim, yDim).xyCutoffs = xyCutoffs;
+        }
+        getXYCutoffs() {
+            const rowFilterList = [...this.rowFilterMap.values()].reduce((accu, xmap) => accu.concat([...xmap.values()]), []);
+            return rowFilterList
+                .filter(rowFilter => rowFilter.xyCutoffs !== null)
+                .map(rowFilter => {
+                return {
+                    xDim: rowFilter.xDim,
+                    yDim: rowFilter.yDim,
+                    xyCutoffs: rowFilter.xyCutoffs
+                };
+            });
         }
     }
     SpData.ROW_FILTER_EVENT = "rowFilterEvent";
     SpData.HL_POINT_EVENT = "hlPointEvent";
     SpData.HL_GRAPH_EVENT = "hlGraphEvent";
     spm.SpData = SpData;
+})(spm || (spm = {}));
+// eslint-disable-next-line no-unused-vars
+var spm;
+(function (spm) {
+    class Style {
+        constructor(bindto) {
+            this.plotProperties = {
+                /** Color used when categories coloring is not applied */
+                noCatColor: "#43665e",
+                /** Color used to show in background full plots, with cutoffs */
+                watermarkColor: "#e4e4e4",
+                point: {
+                    /** Radius used to draw points as circles */
+                    radius: 2,
+                    /** Opacity value used for points */
+                    alpha: 0.5
+                },
+                regression: {
+                    /** Width of path stroke */
+                    strokeWidth: 4
+                }
+            };
+            this.bindto = bindto;
+        }
+        initWith(cssRules, plotProperties) {
+            this.cssRules = cssRules;
+            if (plotProperties) {
+                if (typeof plotProperties.noCatColor !== "undefined") {
+                    if (Style.isValidColor(plotProperties.noCatColor)) {
+                        this.plotProperties.noCatColor = plotProperties.noCatColor;
+                    }
+                    else {
+                        console.error(`plotProperties.noCatColor ${plotProperties.noCatColor} is invalid`);
+                    }
+                }
+                if (typeof plotProperties.watermarkColor !== "undefined") {
+                    if (Style.isValidColor(plotProperties.watermarkColor)) {
+                        this.plotProperties.watermarkColor = plotProperties.watermarkColor;
+                    }
+                    else {
+                        console.error(`plotProperties.watermarkColor ${plotProperties.watermarkColor} is invalid`);
+                    }
+                }
+            }
+            if (plotProperties && plotProperties.point) {
+                this.initPointPlotPropertiesWith(plotProperties.point);
+            }
+            if (plotProperties && plotProperties.regression) {
+                this.initRegressionPlotPropertiesWith(plotProperties.regression);
+            }
+        }
+        initPointPlotPropertiesWith(pointPlotProperties) {
+            if (typeof pointPlotProperties.alpha !== "undefined") {
+                if (Style.isValidAlpha(pointPlotProperties.alpha)) {
+                    this.plotProperties.point.alpha = +pointPlotProperties.alpha;
+                }
+                else {
+                    console.error(`plotProperties.alpha ${pointPlotProperties.alpha} is invalid`);
+                }
+            }
+            if (typeof pointPlotProperties.radius !== "undefined") {
+                if (Style.isPositiveNumber(pointPlotProperties.radius)) {
+                    this.plotProperties.point.radius = +pointPlotProperties.radius;
+                }
+                else {
+                    console.error(`plotProperties.point.radius ${pointPlotProperties.radius} is invalid`);
+                }
+            }
+        }
+        initRegressionPlotPropertiesWith(regressionPlotProperties) {
+            if (typeof regressionPlotProperties.strokeWidth !== "undefined") {
+                if (Style.isPositiveNumber(regressionPlotProperties.strokeWidth)) {
+                    this.plotProperties.regression.strokeWidth = +regressionPlotProperties.strokeWidth;
+                }
+                else {
+                    console.error(`plotProperties.regression.strokeWidth ${regressionPlotProperties.strokeWidth} is invalid`);
+                }
+            }
+        }
+        static isValidColor(colorSpecifier) {
+            return colorSpecifier !== null && d3.color(colorSpecifier) !== null;
+        }
+        static isValidAlpha(value) {
+            if (value) {
+                const valueAsNumber = +value;
+                return valueAsNumber >= 0 && valueAsNumber <= 1 && valueAsNumber.toString(10) === value.toString(10);
+            }
+            return false;
+        }
+        static isPositiveNumber(value) {
+            if (value) {
+                const valueAsNumber = +value;
+                return valueAsNumber >= 0 && valueAsNumber.toString(10) === value.toString(10);
+            }
+            return false;
+        }
+        applyCssRules() {
+            if (this.cssRules) {
+                for (const [selector, declarations] of Object.entries(this.cssRules)) {
+                    const selection = d3.select(this.bindto).selectAll(selector);
+                    const applyDeclaration = (declaration) => {
+                        const splitted = declaration.split(":");
+                        if (splitted.length === 2) {
+                            selection.style(splitted[0], splitted[1]);
+                        }
+                        else {
+                            console.error("Invalid CSS declaration:", declaration);
+                        }
+                    };
+                    if (Array.isArray(declarations)) {
+                        declarations.forEach(applyDeclaration);
+                    }
+                    if (typeof declarations === "string") {
+                        applyDeclaration(declarations);
+                    }
+                }
+            }
+        }
+    }
+    spm.Style = Style;
 })(spm || (spm = {}));
 // eslint-disable-next-line no-unused-vars
 var spm;
@@ -5489,8 +6079,17 @@ var spm;
         }
         ;
         // eslint-disable-next-line max-lines-per-function
-        generate(visibilityPadId) {
+        generate(visibilityPadId, visiblePlots) {
             const thisPad = this;
+            this.hidePlots.clear();
+            if (Array.isArray(visiblePlots)) {
+                this.msp.scatterPlotList.forEach(function (sp, i) {
+                    const index = i % visiblePlots.length;
+                    if (!visiblePlots[index]) {
+                        thisPad.hidePlots.add(sp);
+                    }
+                });
+            }
             const visibilityPad = (visibilityPadId && !d3.select("#" + visibilityPadId).empty())
                 ? d3.select("#" + visibilityPadId)
                 : d3.select(this.msp.bindto + " .visibilityPad");

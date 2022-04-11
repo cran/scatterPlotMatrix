@@ -11,6 +11,10 @@ HTMLWidgets.widget({
             return (index !== null) ? index + 1 : index;
         }
 
+        function r2JsIndex(index) {
+            return (index !== null) ? index - 1 : index;
+        }
+
         // @ts-ignore
         const scatterPlotMatrix = new spm.ScatterPlotMatrix(el.id, width, height);
 
@@ -22,7 +26,7 @@ HTMLWidgets.widget({
 
                 // If htmlwidget is included in Shiny app, listen JavaScript messages sent from Shiny
                 if (HTMLWidgets.shinyMode) {
-                    ["setDistribType", "setRegressionType", "setCorrPlotType", "setCorrPlotCS", "setContinuousColorScale", "setCategoricalColorScale", "setKeptColumns", "changeMouseMode", "setXAxis", "setYAxis", "setZAxis", "getPlotConfig"].forEach(func => {
+                    ["setDistribType", "setRegressionType", "setCorrPlotType", "setCorrPlotCS", "setContinuousColorScale", "setCategoricalColorScale", "setCutoffs", "setKeptColumns", "changeMouseMode", "setZAxis", "getPlotConfig"].forEach(func => {
                         Shiny.addCustomMessageHandler("scatterPlotMatrix:" + func, function(message) {
                             var el = document.getElementById(message.id);
                             if (el) {
@@ -34,12 +38,6 @@ HTMLWidgets.widget({
                     // Listen event sent by the scatterPlotMatrix
                     const eventInputId = config.eventInputId !== null ? config.eventInputId : spm.ScatterPlotMatrix.PLOT_EVENT;
                     scatterPlotMatrix.on(spm.ScatterPlotMatrix.PLOT_EVENT, function (event) {
-                        if (event.type === spm.ScatterPlotMatrix.SELECTION_EVENT) {
-                            event.value.forEach(selection => {
-                                selection.plotIndex = js2RIndex(selection.plotIndex);
-
-                            })
-                        }
                         // Forward 'event' to Shiny through the reactive input 'eventInputId'
                         Shiny.setInputValue(eventInputId, event, {priority: "event"});
                     });
@@ -48,14 +46,30 @@ HTMLWidgets.widget({
                 const controlWidgets = (config.controlWidgets === null) 
                     ? !HTMLWidgets.shinyMode : 
                     config.controlWidgets;
+
+                const slidersPosition = config.slidersPosition
+                    ? {}
+                    : null;
+                if (slidersPosition !== null) {
+                    if (typeof config.slidersPosition.dimCount === "number") {
+                        slidersPosition.dimCount = config.slidersPosition.dimCount
+                    }
+                    if (typeof config.slidersPosition.xStartingDimIndex === "number") {
+                        slidersPosition.xStartingDimIndex = r2JsIndex(config.slidersPosition.xStartingDimIndex)
+                    }
+                    if (typeof config.slidersPosition.yStartingDimIndex === "number") {
+                        slidersPosition.yStartingDimIndex = r2JsIndex(config.slidersPosition.yStartingDimIndex)
+                    }
+                }
+
                 // @ts-ignore
                 scatterPlotMatrix.generate({
                     // @ts-ignore
                     data: HTMLWidgets.dataframeToD3(config.data),
                     rowLabels: config.rowLabels,
-                    controlWidgets: controlWidgets,
                     categorical: config.categorical,
                     inputColumns: config.inputColumns,
+                    cutoffs: config.cutoffs,
                     keptColumns: config.keptColumns,
                     zAxisDim: config.zAxisDim,
                     distribType: config.distribType,
@@ -65,7 +79,11 @@ HTMLWidgets.widget({
                     rotateTitle : config.rotateTitle,
                     columnLabels: config.columnLabels,
                     continuousCS: config.continuousCS,
-                    categoricalCS: config.categoricalCS
+                    categoricalCS: config.categoricalCS,
+                    controlWidgets: controlWidgets,
+                    cssRules: config.cssRules,
+                    plotProperties: config.plotProperties,
+                    slidersPosition: slidersPosition
                 });
             }, // End 'renderValue'
 
@@ -93,20 +111,16 @@ HTMLWidgets.widget({
                 scatterPlotMatrix.setCategoricalColorScale(params.categoricalCsId);
             },
 
+            setCutoffs: function(params) {
+                scatterPlotMatrix.setCutoffs(params.cutoffs);
+            },
+
             setKeptColumns: function(params) {
                 scatterPlotMatrix.setKeptColumns(params.keptColumns);
             },
 
             changeMouseMode: function(params) {
                 scatterPlotMatrix.changeMouseMode(params.interactionType);
-            },
-
-            setXAxis: function(params) {
-                scatterPlotMatrix.setXAxis(params.dim);
-            },
-
-            setYAxis: function(params) {
-                scatterPlotMatrix.setYAxis(params.dim);
             },
 
             setZAxis: function(params) {
@@ -116,6 +130,8 @@ HTMLWidgets.widget({
             getPlotConfig: function(params) {
                 if (HTMLWidgets.shinyMode) {
                     const plotConfig = scatterPlotMatrix.getPlotConfig();
+                    plotConfig.slidersPosition.xStartingDimIndex = js2RIndex(plotConfig.slidersPosition.xStartingDimIndex);
+                    plotConfig.slidersPosition.yStartingDimIndex = js2RIndex(plotConfig.slidersPosition.yStartingDimIndex);
                     Shiny.setInputValue(params.configInputId, plotConfig, {priority: "event"});
                 }
             },

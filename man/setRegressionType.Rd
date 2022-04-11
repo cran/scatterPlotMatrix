@@ -34,8 +34,8 @@ Tells which type of regression to use for regression plots.
        scatterPlotMatrix(iris)
      })
      observe({
-       linearFlag <- ifelse(input$linearRegressionCB, 1, 0)    
-       loessFlag <- ifelse(input$loessCB, 2, 0)    
+       linearFlag <- ifelse(input$linearRegressionCB, 1, 0)
+       loessFlag <- ifelse(input$loessCB, 2, 0)
        scatterPlotMatrix::setRegressionType("spMatrix", linearFlag + loessFlag)
      })
    }

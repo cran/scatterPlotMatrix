@@ -40,7 +40,7 @@ Tells which dim is to display on Z axis.
      output$spMatrix <- renderScatterPlotMatrix({
        scatterPlotMatrix(iris)
      })
-       
+
      observe({
        scatterPlotMatrix::setZAxis("spMatrix", if (input$zAxisUsedCB) input$zAxisSelect else NULL)
      })

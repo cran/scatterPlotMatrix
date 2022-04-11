@@ -24,12 +24,12 @@ Tells which color scale to use for categorical columns.
 
    ui <- fluidPage(
      selectInput(
-       "categoricalCsSelect", 
-       "Categorical Color Scale:", 
+       "categoricalCsSelect",
+       "Categorical Color Scale:",
        choices = list(
-         "Category10" = "Category10", "Accent" = "Accent", "Dark2" = "Dark2", 
+         "Category10" = "Category10", "Accent" = "Accent", "Dark2" = "Dark2",
          "Paired" = "Paired", "Set1" = "Set1"
-       ), 
+       ),
        selected = "Category10"
      ),
      p("The selector controls the colors used when reference column is of type categorical"),

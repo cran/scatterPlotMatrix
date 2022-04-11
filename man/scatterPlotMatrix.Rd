@@ -6,20 +6,24 @@
 \usage{
 scatterPlotMatrix(
   data,
-  controlWidgets = FALSE,
   categorical = NULL,
   inputColumns = NULL,
+  cutoffs = NULL,
   keptColumns = NULL,
   zAxisDim = NULL,
   distribType = 2,
   regressionType = 0,
   corrPlotType = "Circles",
-  corrPlotCS = "Plasma",
+  corrPlotCS = NULL,
   rotateTitle = FALSE,
   columnLabels = NULL,
   continuousCS = "Viridis",
   categoricalCS = "Category10",
   eventInputId = NULL,
+  controlWidgets = FALSE,
+  cssRules = NULL,
+  plotProperties = NULL,
+  slidersPosition = NULL,
   width = NULL,
   height = NULL,
   elementId = NULL
@@ -28,55 +32,96 @@ scatterPlotMatrix(
 \arguments{
 \item{data}{data.frame with data to use in the chart.}
 
-\item{controlWidgets}{Tells if some widgets must be available to control plot; 
-\code{NULL} is allowed, meaning that '!HTMLWidgets.shinyMode' is to use; 
-default value is \code{FALSE}.}
-
-\item{categorical}{List of list (one for each data column) containing the name of available categories, 
-or \code{NULL} if column corresponds to continuous data; 
+\item{categorical}{List of list (one for each data column) containing the name of available categories,
+or \code{NULL} if column corresponds to continuous data;
 \code{NULL} is allowed, meaning all columns are continuous.}
 
-\item{inputColumns}{List of boolean (one for each data column), \code{TRUE} for an input column, \code{FALSE} for an output column; 
+\item{inputColumns}{List of boolean (one for each data column), \code{TRUE} for an input column, \code{FALSE} for an output column;
 \code{NULL} is allowed, meaning all columns are inputs.}
 
-\item{keptColumns}{List of boolean (one for each data column), \code{FALSE} if column has to be ignored; 
+\item{cutoffs}{List of 'SpCutoff'; a 'SpCutoff' is a list defining a 'xDim', 'yDim' and a list of 'xyCutoff';
+a 'xyCutoff' is a pair of 'cutoff' (one for x axis, one for y axis);
+a 'cutoff' is a list containing two values (min and max values)
+or \code{NULL} if there is no cutoff to apply for this axis;
+\code{NULL} is allowed, meaning there is no cutoff to apply.}
+
+\item{keptColumns}{List of boolean (one for each data column), \code{FALSE} if column has to be ignored;
 \code{NULL} is allowed, meaning all columns are available.}
 
-\item{zAxisDim}{Name of the column represented by z axis (used to determine the color to attribute to a point); 
+\item{zAxisDim}{Name of the column represented by z axis (used to determine the color to attribute to a point);
 \code{NULL} is allowed, meaning there is no coloring to apply.}
 
 \item{distribType}{Binary code indicating the type of distribution plot (bit 1: density plot, bit 2: histogram).}
 
 \item{regressionType}{Binary code indicating the type of regression plot (bit 1: linear, bit 2: loess).}
 
-\item{corrPlotType}{String indicating the type of correlation plots to use;
-supported values: \code{Circles} to use a circle tree map, \code{Text} to use simple text labels; 
+\item{corrPlotType}{String indicating the type of correlation plots to use.
+Supported values: \code{Circles} to use a circle tree map;
+\code{Text} to display values of correlation as colored text labels (color scale domain is [-1; 1]);
+\code{AbsText} to display values of correlation as colored text labels (color scale domain is [0; 1],
+absolute value of correlations is used);
+\code{Empty} to not display values of correlation;
 default value is \code{Circles}.}
 
-\item{corrPlotCS}{Name of the color Scale to use for correlation plot when plot type is 'Text';
-supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault", 
-"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu", 
-"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"; 
-default value is \code{Plasma}.}
+\item{corrPlotCS}{Name of the color Scale to use for correlation plot when plot type is 'Text' or 'AbsText';
+supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
+"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
+"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
+default value is \code{NULL},
+which corresponds to "RdBu" if corrPlotType is \code{Text},
+or "Blues" if corrPlotType is \code{AbsText}.}
 
 \item{rotateTitle}{\code{TRUE} if column title must be rotated.}
 
-\item{columnLabels}{List of string (one for each data column) to display in place of column name found in data, 
-or \code{NULL} if there is no alternative name; 
-\code{NULL} is allowed, meaning all columns are without alternative name; 
+\item{columnLabels}{List of string (one for each data column) to display in place of column name found in data,
+or \code{NULL} if there is no alternative name;
+\code{NULL} is allowed, meaning all columns are without alternative name;
 \code{<br>} can be used to insert line breaks.}
 
 \item{continuousCS}{Name of the color Scale to use for continuous data;
-supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault", 
-"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu", 
-"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"; 
+supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
+"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
+"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
 default value is \code{Viridis}.}
 
-\item{categoricalCS}{Name of the color Scale to use for categorical data; 
-supported names: Category10, Accent, Dark2, Paired, Set1; 
+\item{categoricalCS}{Name of the color Scale to use for categorical data;
+supported names: Category10, Accent, Dark2, Paired, Set1;
 default value is \code{Category10}.}
 
-\item{eventInputId}{When plot event occured, reactive input to write to; \code{NULL} is allowed, default value is 'plotEvent'.}
+\item{eventInputId}{When plot event occured, reactive input to write to; \code{NULL} is allowed, default value is 'plotEvent'.
+An event is a list with two named elements 'type' and 'value'.
+If 'type' is 'zAxisChange', it means the coloration of points has changed,
+(probably because an header of column has been clicked), and 'value' is a name of column (or NULL).}
+
+\item{controlWidgets}{Tells if some widgets must be available to control plot;
+\code{NULL} is allowed, meaning that '!HTMLWidgets.shinyMode' is to use;
+default value is \code{FALSE}.}
+
+\item{cssRules}{CSS rules to add.
+Must be a named list of the form list(selector = declarations),
+where selector is a valid CSS selector and declarations is a string or vector of declarations.}
+
+\item{plotProperties}{Adjust some properties which can not be set through CSS (mainly size, color and opacity of points).
+Default value is \code{NULL} which is equivalent to:
+  list(
+    noCatColor = "#43665e",
+    watermarkColor = "#ddd",
+    point = list(
+      alpha = 0.5,
+      radius = 2
+    ),
+    regression = list(
+      strokeWidth = 4
+    )
+  )}
+
+\item{slidersPosition}{Set initial position of sliders, specifying which columns intervals are visible.
+Default value is \code{NULL} which is equivalent to:
+  list(
+    dimCount = 8,
+    xStartingDimIndex = 1,
+    yStartingDimIndex = 1
+  )}
 
 \item{width}{Integer in pixels defining the width of the widget.}
 
@@ -108,6 +153,23 @@ htmlwidget for d3.js scatter plot matrix
    columnLabels <- gsub("\\\\.", "<br>", colnames(iris))
    scatterPlotMatrix(iris, zAxisDim = "Species", columnLabels = columnLabels)
    # Given names are displayed in place of dataset column names; <br> is used to insert line breaks
+
+   scatterPlotMatrix(iris, cssRules = list(
+       ".jitterZone" = "fill: pink",
+       ".tick text" = c("fill: red", "font-size: 1.8em")
+   ))
+   # Background of plot is pink and text of axes ticks is red and greater
+
+   scatterPlotMatrix(iris, plotProperties = list(
+     noCatColor = "DarkCyan",
+     point = list(
+       alpha = 0.3,
+       radius = 4
+     )
+   ))
+   # Points of plots are different:
+   # two times greater, with opacity reduced from 0.5 to 0.3, and a 'DarkCyan' color
+
  }
 
 }

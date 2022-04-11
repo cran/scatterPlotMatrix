@@ -2,7 +2,8 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{changeMouseMode}
 \alias{changeMouseMode}
-\title{This function allows to set the type of interaction; three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').}
+\title{This function allows to set the type of interaction;
+three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').}
 \usage{
 changeMouseMode(id, interactionType)
 }
@@ -15,7 +16,8 @@ changeMouseMode(id, interactionType)
 No return value, called from shiny applications for side effects.
 }
 \description{
-This function allows to set the type of interaction; three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').
+This function allows to set the type of interaction;
+three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').
 }
 \examples{
  if(interactive()) {
@@ -24,8 +26,8 @@ This function allows to set the type of interaction; three types of mouse intera
 
    ui <- fluidPage(
      selectInput(
-       "mouseMode", 
-       "Mouse Interactions:", 
+       "mouseMode",
+       "Mouse Interactions:",
        c("Tooltip" = "tooltip", "Filter" = "filter", "Zoom" = "zoom")
      ),
      p("The selector controls the type of mouse interactions with the scatterPlotMatrix"),

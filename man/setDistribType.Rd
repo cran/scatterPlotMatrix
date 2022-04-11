@@ -24,9 +24,9 @@ Tells which type of representation to use for distribution plots.
 
    ui <- fluidPage(
      selectInput(
-       "distribType", 
-       "Distribution Representation:", 
-       choices = list("Histogram" = 2, "Density Plot" = 1), 
+       "distribType",
+       "Distribution Representation:",
+       choices = list("Histogram" = 2, "Density Plot" = 1),
        selected = 2
      ),
      p("The selector controls type of representation to use for distribution plots"),

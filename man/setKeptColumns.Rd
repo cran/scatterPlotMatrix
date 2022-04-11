@@ -2,14 +2,14 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setKeptColumns}
 \alias{setKeptColumns}
-\title{Column visibitity}
+\title{Column visibility}
 \usage{
 setKeptColumns(id, keptColumns)
 }
 \arguments{
 \item{id}{Output variable to read from (id which references the requested plot).}
 
-\item{keptColumns}{Vector of boolean (one for each data column), \code{FALSE} if column has to be hidden. 
+\item{keptColumns}{Vector of boolean (one for each data column), \code{FALSE} if column has to be hidden.
 A named list can also be provided to only indicate which columns must be assigned to a new visibility.}
 }
 \value{
@@ -35,7 +35,7 @@ Tells which columns have to be visible.
      })
      observeEvent(input$hideColumnsCB, {
        keptColumns <- vapply(
-         1:ncol(iris), 
+         1:ncol(iris),
          function(i) {
            return(ifelse(input$hideColumnsCB, ncol(iris) - i >= 2, TRUE))
          },

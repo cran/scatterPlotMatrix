@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{getPlotConfig}
 \alias{getPlotConfig}
-\title{Asks to retrieve the plot configuration. 
+\title{Asks to retrieve the plot configuration.
 Result will be sent through a reactive input.}
 \usage{
 getPlotConfig(id, configInputId)
@@ -16,6 +16,6 @@ getPlotConfig(id, configInputId)
 No return value, called from shiny applications for side effects.
 }
 \description{
-Asks to retrieve the plot configuration. 
+Asks to retrieve the plot configuration.
 Result will be sent through a reactive input.
 }

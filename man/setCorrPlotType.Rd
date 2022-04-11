@@ -9,7 +9,7 @@ setCorrPlotType(id, corrPlotType)
 \arguments{
 \item{id}{Output variable to read from (id which references the requested plot).}
 
-\item{corrPlotType}{One of the available correlation plot types (Circles, Text).}
+\item{corrPlotType}{One of the available correlation plot types (Empty, Circles, Text, AbsText).}
 }
 \value{
 No return value, called from shiny applications for side effects.
@@ -24,9 +24,14 @@ Tells which type of correlation plot to use.
 
    ui <- fluidPage(
      selectInput(
-       "corrPlotTypeSelect", 
-       "Correlation Plot Type:", 
-       choices = list("Circles" = "Circles", "Text" = "Text"), 
+       "corrPlotTypeSelect",
+       "Correlation Plot Type:",
+       choices = list(
+         "Empty" = "Empty",
+         "Circles" = "Circles",
+         "Text" = "Text",
+         "AbsText" = "AbsText"
+       ),
        selected = "Circles"
      ),
      p("The selector controls the type of correlation to use"),

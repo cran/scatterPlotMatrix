@@ -9,7 +9,7 @@ describe("options", {
         it("should accept a dataframe", {
             data <- data.frame()
             expect_equal(
-                scatterPlotMatrix(data)$x$data, 
+                scatterPlotMatrix(data)$x$data,
                 data
             )
         })
@@ -17,14 +17,14 @@ describe("options", {
         it("should accept a matrix", {
             data <- matrix()
             expect_equal(
-                scatterPlotMatrix(data)$x$data, 
+                scatterPlotMatrix(data)$x$data,
                 data
             )
         })
 
         it("should refuse invalid value and throw an error", {
             expect_error(
-                scatterPlotMatrix(data = list()), 
+                scatterPlotMatrix(data = list()),
                 "'data' must be a dataframe"
             )
         })
@@ -35,62 +35,78 @@ describe("options", {
     # **********************
     describe("categorical", {
         it("should keep unchanged a valid value", {
-            categorical <- list(NULL, list(4, 6, 8), NULL, NULL, NULL, NULL, NULL, list(0, 1), list(0, 1), list(3:5), list(1:8))
+            categorical <- list(
+                NULL,
+                list(4, 6, 8),
+                NULL, NULL, NULL, NULL, NULL,
+                list(0, 1),
+                list(0, 1),
+                list(3:5),
+                list(1:8)
+            )
             expect_equal(
-                scatterPlotMatrix(mtcars, categorical = categorical)$x$categorical, 
+                scatterPlotMatrix(mtcars, categorical = categorical)$x$categorical,
                 categorical
             )
         })
         it("should fix invalid type and print a message", {
             categorical <- 1
             expect_message(
-                out <- scatterPlotMatrix(mtcars, categorical = categorical), 
+                out <- scatterPlotMatrix(mtcars, categorical = categorical),
                 "'categorical' must be a list"
             )
             expect_equal(
-                out$x$categorical, 
+                out$x$categorical,
                 rep(list(NULL), ncol(mtcars))
             )
         })
         it("should fix invalid elements and print a message", {
-            categorical <- list(NULL, data.frame(), NULL, NULL, NULL, NULL, NULL, list(0, 1), list(0, 1), list(3:5), list(1:8))
+            categorical <- list(
+                NULL,
+                data.frame(),
+                NULL, NULL, NULL, NULL, NULL,
+                list(0, 1),
+                list(0, 1),
+                list(3:5),
+                list(1:8)
+            )
             fixed <- categorical
             fixed[2] <- list(NULL)
             expect_message(
-                out <- scatterPlotMatrix(mtcars, categorical = categorical), 
+                out <- scatterPlotMatrix(mtcars, categorical = categorical),
                 "categorical 2 must be a vector"
             )
             expect_equal(
-                out$x$categorical, 
+                out$x$categorical,
                 fixed
             )
         })
         it("should accept vector type for elements (by coercing to list)", {
             categorical <- list(NULL, c(4, 6, 8), NULL, NULL, NULL, NULL, NULL, c(0, 1), c(0, 1), 3:5, 1:8)
             fixed <- vapply(
-                categorical, 
+                categorical,
                 function(cat) ifelse(is.null(cat), list(NULL), list(as.list(cat))),
                 list(1)
             )
             expect_equal(
-                scatterPlotMatrix(mtcars, categorical = categorical)$x$categorical, 
+                scatterPlotMatrix(mtcars, categorical = categorical)$x$categorical,
                 fixed
             )
         })
         it("should fix invalid length and print a message", {
             categorical <- list()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, categorical = categorical), 
+                out <- scatterPlotMatrix(mtcars, categorical = categorical),
                 "Length of 'categorical' must be equal to the number of columns of 'data'"
             )
             expect_equal(
-                out$x$categorical, 
+                out$x$categorical,
                 NULL
             )
         })
         it("should initialize using factor elements", {
             expect_equal(
-                scatterPlotMatrix(iris)$x$categorical, 
+                scatterPlotMatrix(iris)$x$categorical,
                 list(NULL, NULL, NULL, NULL, list("setosa", "versicolor", "virginica"))
             )
         })
@@ -103,18 +119,18 @@ describe("options", {
         it("should keep unchanged a valid value", {
             keptColumns <- list(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, TRUE, TRUE)
             expect_equal(
-                scatterPlotMatrix(mtcars, keptColumns = keptColumns)$x$keptColumns, 
+                scatterPlotMatrix(mtcars, keptColumns = keptColumns)$x$keptColumns,
                 keptColumns
             )
         })
         it("should fix invalid type and print a message", {
             keptColumns <- data.frame()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns), 
+                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns),
                 "'keptColumns' must be a vector"
             )
             expect_equal(
-                out$x$keptColumns, 
+                out$x$keptColumns,
                 NULL
             )
         })
@@ -123,25 +139,70 @@ describe("options", {
             fixed <- keptColumns
             fixed[2] <- TRUE
             expect_message(
-                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns), 
+                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns),
                 "keptColumns 2 must be of logical type"
             )
             expect_equal(
-                out$x$keptColumns, 
+                out$x$keptColumns,
                 fixed
             )
         })
         it("should fix invalid length and print a message", {
             keptColumns <- list()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns), 
+                out <- scatterPlotMatrix(mtcars, keptColumns = keptColumns),
                 "Length of 'keptColumns' must be equal to the number of columns of 'data'"
             )
             expect_equal(
-                out$x$keptColumns, 
+                out$x$keptColumns,
                 NULL
             )
         })
+    })
+
+    # **************************
+    # 'cutoffs' argument
+    # **************************
+    describe("cutoffs", {
+        it("should keep unchanged a valid value", {
+            cutoffs <- list(list(
+                xDim = "Sepal.Length",
+                yDim = "Species",
+                xyCutoffs = list(
+                    list(c(4, 8), c(-0.1, 0.1)),
+                    list(c(4, 8), c(1.9, 2.1))
+                )
+            ))
+            expect_equal(
+                scatterPlotMatrix(iris, cutoffs = cutoffs)$x$cutoffs,
+                cutoffs
+            )
+        })
+
+        it("should fix invalid type and print a message", {
+            cutoffs <- 1
+            expect_message(
+                out <- scatterPlotMatrix(iris, cutoffs = cutoffs),
+                "'cutoffs' must be a list"
+            )
+            expect_equal(
+                out$x$cutoffs,
+                NULL
+            )
+        })
+
+        it("should fix invalid spCutoffs and print a message", {
+            cutoffs <- list(list(wrong = ""))
+            expect_message(
+                out <- scatterPlotMatrix(iris, cutoffs = cutoffs),
+                "cutoff 1 doesn't contains expected fields"
+            )
+            expect_equal(
+                out$x$cutoffs,
+                NULL
+            )
+        })
+
     })
 
     # ***********************
@@ -151,18 +212,18 @@ describe("options", {
         it("should keep unchanged a valid value", {
             inputColumns <- list(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, TRUE, TRUE)
             expect_equal(
-                scatterPlotMatrix(mtcars, inputColumns = inputColumns)$x$inputColumns, 
+                scatterPlotMatrix(mtcars, inputColumns = inputColumns)$x$inputColumns,
                 inputColumns
             )
         })
         it("should fix invalid type and print a message", {
             inputColumns <- data.frame()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns), 
+                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns),
                 "'inputColumns' must be a vector"
             )
             expect_equal(
-                out$x$inputColumns, 
+                out$x$inputColumns,
                 NULL
             )
         })
@@ -171,22 +232,22 @@ describe("options", {
             fixed <- inputColumns
             fixed[2] <- TRUE
             expect_message(
-                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns), 
+                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns),
                 "inputColumns 2 must be of logical type"
             )
             expect_equal(
-                out$x$inputColumns, 
+                out$x$inputColumns,
                 fixed
             )
         })
         it("should fix invalid length and print a message", {
             inputColumns <- list()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns), 
+                out <- scatterPlotMatrix(mtcars, inputColumns = inputColumns),
                 "Length of 'inputColumns' must be equal to the number of columns of 'data'"
             )
             expect_equal(
-                out$x$inputColumns, 
+                out$x$inputColumns,
                 NULL
             )
         })
@@ -199,17 +260,17 @@ describe("options", {
         it("should keep unchanged a valid value", {
             zAxisDim <- "cyl"
             expect_equal(
-                scatterPlotMatrix(mtcars, zAxisDim = zAxisDim)$x$zAxisDim, 
+                scatterPlotMatrix(mtcars, zAxisDim = zAxisDim)$x$zAxisDim,
                 zAxisDim
             )
         })
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, zAxisDim = 1), 
+                out <- scatterPlotMatrix(mtcars, zAxisDim = 1),
                 paste("must be a valid column dimension, it must be one of:", toString(colnames(mtcars)))
             )
             expect_equal(
-                out$x$zAxisDim, 
+                out$x$zAxisDim,
                 NULL
             )
         })
@@ -222,36 +283,36 @@ describe("options", {
         it("should fix invalid type and print a message", {
             distribType <- data.frame()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, distribType = distribType), 
+                out <- scatterPlotMatrix(mtcars, distribType = distribType),
                 "'distribType' must be of numeric type"
             )
             expect_equal(
-                out$x$distribType, 
+                out$x$distribType,
                 2
             )
         })
 
         it("should keep unchanged a valid value 1", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), distribType = 1)$x$distribType, 
+                scatterPlotMatrix(data.frame(), distribType = 1)$x$distribType,
                 1
             )
         })
-        
+
         it("should keep unchanged a valid value 2", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), distribType = 2)$x$distribType, 
+                scatterPlotMatrix(data.frame(), distribType = 2)$x$distribType,
                 2
             )
         })
-        
+
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(data.frame(), distribType = 5), 
+                out <- scatterPlotMatrix(data.frame(), distribType = 5),
                 paste("must be one of:", toString(0:3))
             )
             expect_equal(
-                out$x$distribType, 
+                out$x$distribType,
                 2
             )
         })
@@ -264,36 +325,36 @@ describe("options", {
         it("should fix invalid type and print a message", {
             regressionType <- data.frame()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, regressionType = regressionType), 
+                out <- scatterPlotMatrix(mtcars, regressionType = regressionType),
                 "'regressionType' must be of numeric type"
             )
             expect_equal(
-                out$x$regressionType, 
+                out$x$regressionType,
                 0
             )
         })
 
         it("should keep unchanged a valid value 1", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), regressionType = 1)$x$regressionType, 
+                scatterPlotMatrix(data.frame(), regressionType = 1)$x$regressionType,
                 1
             )
         })
-        
+
         it("should keep unchanged a valid value 2", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), regressionType = 2)$x$regressionType, 
+                scatterPlotMatrix(data.frame(), regressionType = 2)$x$regressionType,
                 2
             )
         })
-        
+
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(data.frame(), regressionType = 5), 
+                out <- scatterPlotMatrix(data.frame(), regressionType = 5),
                 paste("must be one of:", toString(0:3))
             )
             expect_equal(
-                out$x$regressionType, 
+                out$x$regressionType,
                 0
             )
         })
@@ -303,22 +364,22 @@ describe("options", {
     # 'corrPlotType' argument
     # ***********************
     describe("corrPlotType", {
-        corrPlotTypes <- c("Circles", "Text")
+        corrPlotTypes <- c("Empty", "Circles", "Text", "AbsText")
         for (type in corrPlotTypes) {
             it(paste("should keep unchanged a valid value", type), {
                 expect_equal(
-                    scatterPlotMatrix(mtcars, corrPlotType = type)$x$corrPlotType, 
+                    scatterPlotMatrix(mtcars, corrPlotType = type)$x$corrPlotType,
                     type
                 )
             })
         }
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, corrPlotType = 1), 
+                out <- scatterPlotMatrix(mtcars, corrPlotType = 1),
                 paste("must be a valid correlation plot type, it must be one of:", toString(corrPlotTypes))
             )
             expect_equal(
-                out$x$corrPlotType, 
+                out$x$corrPlotType,
                 corrPlotTypes[1]
             )
         })
@@ -328,23 +389,28 @@ describe("options", {
     # 'corrPlotCS' argument
     # *********************
     describe("corrPlotCS", {
-        continuousCSList <- c("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault", "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd")
+        continuousCSList <- c(
+            "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow",
+            "CubehelixDefault", "Blues", "Greens", "Greys", "Oranges", "Purples",
+            "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn", "PuBu", "PuRd", "RdBu",
+            "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
+        )
         for (cs in continuousCSList) {
             it(paste("should keep unchanged a valid value", cs), {
                 expect_equal(
-                    scatterPlotMatrix(mtcars, corrPlotCS = cs)$x$corrPlotCS, 
+                    scatterPlotMatrix(mtcars, corrPlotCS = cs)$x$corrPlotCS,
                     cs
                 )
             })
         }
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, corrPlotCS = 1), 
+                out <- scatterPlotMatrix(mtcars, corrPlotCS = 1),
                 paste("must be a valid continuous color scale name, it must be one of:", toString(continuousCSList))
             )
             expect_equal(
-                out$x$corrPlotCS, 
-                continuousCSList[4]
+                out$x$corrPlotCS,
+                NULL
             )
         })
     })
@@ -355,25 +421,25 @@ describe("options", {
     describe("rotateTitle", {
         it("should keep unchanged a valid value TRUE", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), rotateTitle = TRUE)$x$rotateTitle, 
+                scatterPlotMatrix(data.frame(), rotateTitle = TRUE)$x$rotateTitle,
                 TRUE
             )
         })
-        
+
         it("should keep unchanged a valid value FALSE", {
             expect_equal(
-                scatterPlotMatrix(data.frame(), rotateTitle = FALSE)$x$rotateTitle, 
+                scatterPlotMatrix(data.frame(), rotateTitle = FALSE)$x$rotateTitle,
                 FALSE
             )
         })
-        
+
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(data.frame(), rotateTitle = 1), 
+                out <- scatterPlotMatrix(data.frame(), rotateTitle = 1),
                 "'rotateTitle' must be of logical type"
             )
             expect_equal(
-                out$x$rotateTitle, 
+                out$x$rotateTitle,
                 FALSE
             )
         })
@@ -386,42 +452,45 @@ describe("options", {
         it("should keep unchanged a valid value", {
             columnLabels <- gsub("\\.", "<br>", colnames(iris))
             expect_equal(
-                scatterPlotMatrix(iris, columnLabels = columnLabels)$x$columnLabels, 
+                scatterPlotMatrix(iris, columnLabels = columnLabels)$x$columnLabels,
                 columnLabels
             )
         })
         it("should fix invalid type and print a message", {
             columnLabels <- data.frame()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels), 
+                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels),
                 "'columnLabels' must be a vector"
             )
             expect_equal(
-                out$x$columnLabels, 
+                out$x$columnLabels,
                 NULL
             )
         })
         it("should fix invalid elements and print a message", {
-            columnLabels <- list("Col 1", FALSE, "Col 3", "Col 4", "Col 5", "Col 6", "Col 7", "Col 8", "Col 9", "Col 10", "Col 11")
+            columnLabels <- list(
+                "Col 1", FALSE, "Col 3", "Col 4", "Col 5", "Col 6",
+                "Col 7", "Col 8", "Col 9", "Col 10", "Col 11"
+            )
             fixed <- columnLabels
             fixed[2] <- list(NULL)
             expect_message(
-                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels), 
+                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels),
                 "columnLabels 2 must be of character type"
             )
             expect_equal(
-                out$x$columnLabels, 
+                out$x$columnLabels,
                 fixed
             )
         })
         it("should fix invalid length and print a message", {
             columnLabels <- list()
             expect_message(
-                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels), 
+                out <- scatterPlotMatrix(mtcars, columnLabels = columnLabels),
                 "Length of 'columnLabels' must be equal to the number of columns of 'data'"
             )
             expect_equal(
-                out$x$columnLabels, 
+                out$x$columnLabels,
                 NULL
             )
         })
@@ -431,22 +500,27 @@ describe("options", {
     # 'continuousCS' argument
     # ***********************
     describe("continuousCS", {
-        continuousCSList <- c("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault", "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd")
+        continuousCSList <- c(
+            "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow",
+            "CubehelixDefault", "Blues", "Greens", "Greys", "Oranges", "Purples",
+            "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn", "PuBu", "PuRd", "RdBu",
+            "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
+        )
         for (cs in continuousCSList) {
             it(paste("should keep unchanged a valid value", cs), {
                 expect_equal(
-                    scatterPlotMatrix(mtcars, continuousCS = cs)$x$continuousCS, 
+                    scatterPlotMatrix(mtcars, continuousCS = cs)$x$continuousCS,
                     cs
                 )
             })
         }
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, continuousCS = 1), 
+                out <- scatterPlotMatrix(mtcars, continuousCS = 1),
                 paste("must be a valid continuous color scale name, it must be one of:", toString(continuousCSList))
             )
             expect_equal(
-                out$x$continuousCS, 
+                out$x$continuousCS,
                 continuousCSList[1]
             )
         })
@@ -460,18 +534,18 @@ describe("options", {
         for (cs in categoricalCSList) {
             it(paste("should keep unchanged a valid value", cs), {
                 expect_equal(
-                    scatterPlotMatrix(mtcars, categoricalCS = cs)$x$categoricalCS, 
+                    scatterPlotMatrix(mtcars, categoricalCS = cs)$x$categoricalCS,
                     cs
                 )
             })
         }
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, categoricalCS = 1), 
+                out <- scatterPlotMatrix(mtcars, categoricalCS = 1),
                 paste("must be a valid categorical color scale name, it must be one of:", toString(categoricalCSList))
             )
             expect_equal(
-                out$x$categoricalCS, 
+                out$x$categoricalCS,
                 categoricalCSList[1]
             )
         })
@@ -484,17 +558,17 @@ describe("options", {
         it("should keep unchanged a valid value", {
             eventInputId <- "testingInputId"
             expect_equal(
-                scatterPlotMatrix(mtcars, eventInputId = eventInputId)$x$eventInputId, 
+                scatterPlotMatrix(mtcars, eventInputId = eventInputId)$x$eventInputId,
                 eventInputId
             )
         })
         it("should fix invalid value and print a message", {
             expect_message(
-                out <- scatterPlotMatrix(mtcars, eventInputId = 1), 
+                out <- scatterPlotMatrix(mtcars, eventInputId = 1),
                 "'eventInputId' must be of character type"
             )
             expect_equal(
-                out$x$eventInputId, 
+                out$x$eventInputId,
                 NULL
             )
         })
