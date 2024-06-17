@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setCategoricalColorScale}
 \alias{setCategoricalColorScale}
-\title{Tells which color scale to use for categorical columns.}
+\title{Categorical color scale}
 \usage{
 setCategoricalColorScale(id, categoricalCsId)
 }
@@ -15,10 +15,10 @@ setCategoricalColorScale(id, categoricalCsId)
 No return value, called from shiny applications for side effects.
 }
 \description{
-Tells which color scale to use for categorical columns.
+Tells which color scale to use when the Z axis is set to a categorical column.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 
@@ -32,7 +32,7 @@ Tells which color scale to use for categorical columns.
        ),
        selected = "Category10"
      ),
-     p("The selector controls the colors used when reference column is of type categorical"),
+     p("Selector controls used colors when reference column is of type categorical"),
      scatterPlotMatrixOutput("spMatrix")
    )
 

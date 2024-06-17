@@ -1,79 +1,104 @@
-#' htmlwidget for d3.js scatter plot matrix
+#' `htmlwidget` for `d3.js` scatter plot matrix
 #'
 #' @param data
-#'   data.frame with data to use in the chart.
+#'   `data.frame` with data to use in the chart.
 #' @param categorical
 #'   List of list (one for each data column) containing the name of available categories,
-#'   or \code{NULL} if column corresponds to continuous data;
-#'   \code{NULL} is allowed, meaning all columns are continuous.
+#'   or `NULL` if column corresponds to continuous data;
+#'   `NULL` is allowed, meaning all columns are continuous.
+#'   A named list can also be provided to only indicate which columns are categorical,
+#'   associating available categories to a column name.
 #' @param inputColumns
-#'   List of boolean (one for each data column), \code{TRUE} for an input column, \code{FALSE} for an output column;
-#'   \code{NULL} is allowed, meaning all columns are inputs.
+#'   List of boolean (one for each data column),
+#'   `TRUE` for an input column, `FALSE` for an output column;
+#'   `NULL` is allowed, meaning all columns are inputs.
+#'   A list of column names can also be provided to only indicate which columns are inputs.
 #' @param keptColumns
-#'   List of boolean (one for each data column), \code{FALSE} if column has to be ignored;
-#'   \code{NULL} is allowed, meaning all columns are available.
+#'   List of boolean (one for each data column), `FALSE` if column has to be ignored;
+#'   `NULL` is allowed, meaning all columns are available.
+#'   A list of column names can also be provided to only indicate
+#'   which columns are to be kept.
 #' @param cutoffs
-#'   List of 'SpCutoff'; a 'SpCutoff' is a list defining a 'xDim', 'yDim' and a list of 'xyCutoff';
-#'   a 'xyCutoff' is a pair of 'cutoff' (one for x axis, one for y axis);
-#'   a 'cutoff' is a list containing two values (min and max values)
-#'   or \code{NULL} if there is no cutoff to apply for this axis;
-#'   \code{NULL} is allowed, meaning there is no cutoff to apply.
+#'   List of `SpCutoff`;
+#'   a `SpCutoff` is a list defining a `xDim`, `yDim` and a list of `xyCutoff`;
+#'   a `xyCutoff` is a pair of `cutoff` (one for x axis, one for y axis);
+#'   a `cutoff` is a list containing two values (min and max values)
+#'   or `NULL` if there is no cutoff to apply for this axis;
+#'   `NULL` is allowed, meaning there is no cutoff to apply.
 #' @param zAxisDim
-#'   Name of the column represented by z axis (used to determine the color to attribute to a point);
-#'   \code{NULL} is allowed, meaning there is no coloring to apply.
+#'   Name of the column represented by z axis
+#'   (used to determine the color to attribute to a point);
+#'   `NULL` is allowed, meaning there is no coloring to apply.
 #' @param distribType
-#'   Binary code indicating the type of distribution plot (bit 1: density plot, bit 2: histogram).
+#'   Binary code indicating the type of distribution plot
+#'   (bit 1: density plot, bit 2: histogram).
 #' @param regressionType
 #'   Binary code indicating the type of regression plot (bit 1: linear, bit 2: loess).
 #' @param corrPlotType
 #'   String indicating the type of correlation plots to use.
-#'   Supported values: \code{Circles} to use a circle tree map;
-#'   \code{Text} to display values of correlation as colored text labels (color scale domain is [-1; 1]);
-#'   \code{AbsText} to display values of correlation as colored text labels (color scale domain is [0; 1],
-#'   absolute value of correlations is used);
-#'   \code{Empty} to not display values of correlation;
-#'   default value is \code{Circles}.
+#'   Supported values:
+#'   - `Circles` to use a circle tree map;
+#'   - `Text` to display values of correlation as colored text labels
+#'     (color scale domain is `[-1; 1]`);
+#'   - `AbsText` to display values of correlation as colored text labels
+#'     (color scale domain is `[0; 1]`, absolute value of correlations is used);
+#'   - `Empty` to not display values of correlation;
+#'   default value is `Circles`.
 #' @param corrPlotCS
-#'   Name of the color Scale to use for correlation plot when plot type is 'Text' or 'AbsText';
-#'   supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-#'   "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
-#'   "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
-#'   default value is \code{NULL},
-#'   which corresponds to "RdBu" if corrPlotType is \code{Text},
-#'   or "Blues" if corrPlotType is \code{AbsText}.
+#'   Name of the color Scale to use for correlation plot
+#'   when plot type is `Text` or `AbsText`;
+#'   supported names: `Viridis`, `Inferno`, `Magma`, `Plasma`, `Warm`, `Cool`, `Rainbow`,
+#'   `CubehelixDefault`, `Blues`,`Greens`, `Greys`, `Oranges`, `Purples`, `Reds`, `BuGn`,
+#'   `BuPu`, `GnBu`, `OrRd`, `PuBuGn`, `PuBu`, `PuRd`, `RdBu`, `RdPu`, `YlGnBu`, `YlGn`,
+#'   `YlOrBr`, `YlOrRd`;
+#'   default value is `NULL`, which corresponds to `RdBu` if `corrPlotType` is `Text`,
+#'   or `Blues` if `corrPlotType` is `AbsText`.
 #' @param rotateTitle
-#'   \code{TRUE} if column title must be rotated.
+#'   `TRUE` if column title must be rotated.
 #' @param columnLabels
-#'   List of string (one for each data column) to display in place of column name found in data,
-#'   or \code{NULL} if there is no alternative name;
-#'   \code{NULL} is allowed, meaning all columns are without alternative name;
-#'   \code{<br>} can be used to insert line breaks.
+#'   List of string (one for each data column) to display
+#'   in place of column name found in data,
+#'   or `NULL` if there is no alternative name;
+#'   `NULL` is allowed, meaning all columns are without alternative name;
+#'   `<br>` can be used to insert line breaks.
 #' @param continuousCS
 #'   Name of the color Scale to use for continuous data;
-#'   supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-#'   "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
-#'   "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
-#'   default value is \code{Viridis}.
+#'   supported names: `Viridis`, `Inferno`, `Magma`, `Plasma`, `Warm`, `Cool`, `Rainbow`,
+#'   `CubehelixDefault`, `Blues`, `Greens`, `Greys`, `Oranges`, `Purples`, `Reds`, `BuGn`,
+#'   `BuPu`, `GnBu`, `OrRd`, `PuBuGn`, `PuBu`, `PuRd`, `RdBu`, `RdPu`, `YlGnBu`, `YlGn`,
+#'   `YlOrBr`, `YlOrRd`;
+#'   default value is `Viridis`.
 #' @param categoricalCS
 #'   Name of the color Scale to use for categorical data;
-#'   supported names: Category10, Accent, Dark2, Paired, Set1;
-#'   default value is \code{Category10}.
+#'   supported names: `Category10`, `Accent`, `Dark2`, `Paired`, `Set1`;
+#'   default value is `Category10`.
+#' @param mouseMode
+#'   Type of mouse interaction. Three types are available: `tooltip`, `filter` or `zoom`.
 #' @param eventInputId
-#'   When plot event occured, reactive input to write to; \code{NULL} is allowed, default value is 'plotEvent'.
+#'   When plot event occurred, reactive input to write to;
+#'   `NULL` is allowed, meaning no event is sent.
 #'   An event is a list with two named elements 'type' and 'value'.
-#'   If 'type' is 'zAxisChange', it means the coloration of points has changed,
-#'   (probably because an header of column has been clicked), and 'value' is a name of column (or NULL).
+#'   * If `type` is equal to `zAxisChange`:
+#'     * `value` is the new column to use as reference (see `zAxisDim` argument).
+#'   * If `type` is equal to `cutoffChange`:
+#'     * `value$adjusting` is `TRUE` when pointer is moving, changing a cutoff;
+#'     * `value$cutoffs` gives the new values for the cutoffs.
+#'   * If `type` is equal to `pointClicked`:
+#'     * `value$pointIndex` is the index of the clicked point.
 #' @param controlWidgets
 #'   Tells if some widgets must be available to control plot;
-#'   \code{NULL} is allowed, meaning that '!HTMLWidgets.shinyMode' is to use;
-#'   default value is \code{FALSE}.
+#'   `NULL` is allowed, meaning that `!HTMLWidgets.shinyMode` is to use;
+#'   default value is `FALSE`.
 #' @param cssRules
 #'   CSS rules to add.
 #'   Must be a named list of the form list(selector = declarations),
-#'   where selector is a valid CSS selector and declarations is a string or vector of declarations.
+#'   where selector is a valid CSS selector and declarations is
+#'   a string or vector of declarations.
 #' @param plotProperties
-#'   Adjust some properties which can not be set through CSS (mainly size, color and opacity of points).
-#'   Default value is \code{NULL} which is equivalent to:
+#'   Adjust some properties which can not be set through CSS
+#'   (mainly size, color and opacity of points).
+#'   Default value is `NULL` which is equivalent to:
+#'   ```
 #'     list(
 #'       noCatColor = "#43665e",
 #'       watermarkColor = "#ddd",
@@ -85,20 +110,23 @@
 #'         strokeWidth = 4
 #'       )
 #'     )
+#'   ```
 #' @param slidersPosition
 #'   Set initial position of sliders, specifying which columns intervals are visible.
-#'   Default value is \code{NULL} which is equivalent to:
+#'   Default value is `NULL` which is equivalent to:
+#'   ```
 #'     list(
 #'       dimCount = 8,
 #'       xStartingDimIndex = 1,
 #'       yStartingDimIndex = 1
 #'     )
+#'   ```
 #' @param width
 #'   Integer in pixels defining the width of the widget.
 #' @param height
 #'   Integer in pixels defining the height of the widget.
 #' @param elementId
-#'   Unique \code{CSS} selector id for the widget.
+#'   Unique `CSS` selector id for the widget.
 #'
 #' @examples
 #'  if(interactive()) {
@@ -107,9 +135,10 @@
 #'    scatterPlotMatrix(iris, zAxisDim = "Species")
 #'    # Each point has a color depending of its 'Species' value
 #'
-#'    categorical <- list(NULL, c(4, 6, 8), NULL, NULL, NULL, NULL, NULL, c(0, 1), c(0, 1), 3:5, 1:8)
+#'    categorical <-
+#'      list(cyl = c(4, 6, 8), vs = c(0, 1), am = c(0, 1), gear = 3:5, carb = 1:8)
 #'    scatterPlotMatrix(mtcars, categorical = categorical, zAxisDim = "cyl")
-#'    # 'cyl' and four last columns have a box representation for its categories
+#'    # 'cyl' and four last columns have a box representation for categories
 #'    # (use top slider to see the last three columns)
 #'
 #'    scatterPlotMatrix(iris, zAxisDim = "Species", distribType = 1)
@@ -120,7 +149,8 @@
 #'
 #'    columnLabels <- gsub("\\.", "<br>", colnames(iris))
 #'    scatterPlotMatrix(iris, zAxisDim = "Species", columnLabels = columnLabels)
-#'    # Given names are displayed in place of dataset column names; <br> is used to insert line breaks
+#'    # Given names are displayed in place of dataset column names;
+#'    # <br> is used to insert line breaks
 #'
 #'    scatterPlotMatrix(iris, cssRules = list(
 #'        ".jitterZone" = "fill: pink",
@@ -136,7 +166,7 @@
 #'      )
 #'    ))
 #'    # Points of plots are different:
-#'    # two times greater, with opacity reduced from 0.5 to 0.3, and a 'DarkCyan' color
+#'    # two times greater, with opacity reduced from 0.5 to 0.3, and a `DarkCyan` color
 #'
 #'  }
 #'
@@ -158,6 +188,7 @@ scatterPlotMatrix <- function(
   columnLabels = NULL,
   continuousCS = "Viridis",
   categoricalCS = "Category10",
+  mouseMode = "tooltip",
   eventInputId = NULL,
   controlWidgets = FALSE,
   cssRules = NULL,
@@ -185,6 +216,7 @@ scatterPlotMatrix <- function(
       columnLabels = columnLabels,
       continuousCS = continuousCS,
       categoricalCS = categoricalCS,
+      mouseMode = mouseMode,
       eventInputId = eventInputId,
       controlWidgets = controlWidgets,
       cssRules = cssRules,
@@ -199,7 +231,11 @@ scatterPlotMatrix <- function(
     args,
     width = width,
     height = height,
-    sizingPolicy = htmlwidgets::sizingPolicy(padding = 0, browser.defaultHeight = 960, browser.defaultWidth = "auto"),
+    sizingPolicy = htmlwidgets::sizingPolicy(
+      padding = 0,
+      browser.defaultHeight = 960,
+      browser.defaultWidth = "auto"
+    ),
     package = "scatterPlotMatrix",
     elementId = elementId
   )
@@ -215,15 +251,21 @@ scatterPlotMatrix <- function(
 #'   \code{'400px'}, \code{'auto'}) or a number, which will be coerced to a
 #'   string and have \code{'px'} appended.
 #' @param expr An expression that generates a scatterPlotMatrix
-#' @param env The environment in which to evaluate \code{expr}.
-#' @param quoted Is \code{expr} a quoted expression (with \code{quote()})? This
+#' @param env The environment in which to evaluate `expr`.
+#' @param quoted Is `expr` a quoted expression (with \code{quote()})? This
 #'   is useful if you want to save an expression in a variable.
 #'
 #' @name scatterPlotMatrix-shiny
 #'
 #' @export
 scatterPlotMatrixOutput <- function(outputId, width = "100%", height = "600px") {
-  htmlwidgets::shinyWidgetOutput(outputId, "scatterPlotMatrix", width, height, package = "scatterPlotMatrix")
+  htmlwidgets::shinyWidgetOutput(
+    outputId,
+    "scatterPlotMatrix",
+    width,
+    height,
+    package = "scatterPlotMatrix"
+  )
 }
 
 #' @rdname scatterPlotMatrix-shiny
@@ -240,21 +282,23 @@ checkSpmArgs <- function(args) {
     checkEventInputId(
       checkSlidersPosition(
         checkScatterPlotProperties(
-          checkCategoricalCS(
-            checkContinuousCS(
-              checkColumnLabels(
+          checkMouseMode(
+            checkCategoricalCS(
+              checkContinuousCS(
                 checkColumnLabels(
-                  checkRotateTitle(
-                    checkRegressionType(
-                      checkCorrPlotCS(
-                        checkCorrPlotType(
-                          checkDistribType(
-                            checkZAxisDim(
-                              checkInputColumns(
-                                checkCutoffs(
-                                  checkKeptColumns(
-                                    checkCategorical(
-                                      checkData(args)
+                  checkColumnLabels(
+                    checkRotateTitle(
+                      checkRegressionType(
+                        checkCorrPlotCS(
+                          checkCorrPlotType(
+                            checkDistribType(
+                              checkZAxisDim(
+                                checkInputColumns(
+                                  checkCutoffs(
+                                    checkKeptColumns(
+                                      checkCategorical(
+                                        checkData(args)
+                                      )
                                     )
                                   )
                                 )
@@ -290,6 +334,26 @@ checkCategorical <- function(args) {
   }
   if (!is.null(args$categorical)) {
     args$categorical <- as.list(args$categorical)
+    if (!is.null(names(args$categorical)) && !is.null(names(args$data))) {
+      unknownNames <- setdiff(names(args$categorical), names(args$data))
+      if (length(unknownNames) != 0) {
+        message(
+          paste("categorical is a list with unknown column names:", toString(unknownNames))
+        )
+        args$categorical <- rep(list(NULL), colCount)
+      }
+      else {
+        args$categorical <- lapply(seq_len(colCount), function(icol) {
+          colName <- names(args$data)[icol]
+          if (is.null(args$categorical[[colName]])) {
+            return(NULL)
+          }
+          else {
+            return(args$categorical[[colName]])
+          }
+        })
+      }
+    }
     if (colCount != length(args$categorical)) {
       message("Length of 'categorical' must be equal to the number of columns of 'data'")
       args["categorical"] <- list(NULL)
@@ -331,6 +395,23 @@ checkKeptColumns <- function(args) {
     args["keptColumns"] <- list(NULL)
   }
   if (!is.null(args$keptColumns)) {
+    namesMode <-
+      length(args$keptColumns) != 0 && all(unlist(lapply(args$keptColumns, is.character)))
+    if (namesMode && !is.null(names(args$data))) {
+      unknownNames <- setdiff(args$keptColumns, names(args$data))
+      if (length(unknownNames) != 0) {
+        message(
+          paste("keptColumns is a list with unknown column names:", toString(unknownNames))
+        )
+        args$keptColumns <- rep(list(TRUE), colCount)
+      }
+      else {
+        args$keptColumns <- lapply(seq_len(colCount), function(icol) {
+          colName <- names(args$data)[icol]
+          return(colName %in% args$keptColumns)
+        })
+      }
+    }
     if (colCount != length(args$keptColumns)) {
       message("Length of 'keptColumns' must be equal to the number of columns of 'data'")
       args["keptColumns"] <- list(NULL)
@@ -354,6 +435,23 @@ checkInputColumns <- function(args) {
     args["inputColumns"] <- list(NULL)
   }
   if (!is.null(args$inputColumns)) {
+    namesMode <-
+      length(args$inputColumns) != 0 && all(unlist(lapply(args$inputColumns, is.character)))
+    if (namesMode && !is.null(names(args$data))) {
+      unknownNames <- setdiff(args$inputColumns, names(args$data))
+      if (length(unknownNames) != 0) {
+        message(
+          paste("inputColumns is a list with unknown column names:", toString(unknownNames))
+        )
+        args$inputColumns <- rep(list(TRUE), colCount)
+      }
+      else {
+        args$inputColumns <- lapply(seq_len(colCount), function(icol) {
+          colName <- names(args$data)[icol]
+          return(colName %in% args$inputColumns)
+        })
+      }
+    }
     if (colCount != length(args$inputColumns)) {
       message("Length of 'inputColumns' must be equal to the number of columns of 'data'")
       args["inputColumns"] <- list(NULL)
@@ -380,7 +478,9 @@ checkCutoffs <- function(args) {
     for (i in seq_len(length(args$cutoffs))) {
       ## if cutoffs are provided for current column
       if (!setequal(intersect(expectedNames, names(args$cutoffs[[i]])), expectedNames)) {
-        message(paste("cutoff", i, "doesn't contains expected fields:", toString(expectedNames)))
+        message(
+          paste("cutoff", i, "doesn't contains expected fields:", toString(expectedNames))
+        )
         args["cutoffs"] <- list(NULL)
         break
       }
@@ -402,7 +502,7 @@ checkZAxisDim <- function(args) {
   }
   return(args)
 }
-  
+
 checkDistribType <- function(args) {
   if (!is.numeric(args$distribType)) {
     message("'distribType' must be of numeric type")
@@ -424,7 +524,9 @@ checkRegressionType <- function(args) {
   }
   else {
     if (is.na(match(args$regressionType, 0:3))) {
-      message(paste("regressionType:", args$regressionType, "must be one of:", toString(0:3)))
+      message(
+        paste("regressionType:", args$regressionType, "must be one of:", toString(0:3))
+      )
       args["regressionType"] <- 0
     }
   }
@@ -433,7 +535,7 @@ checkRegressionType <- function(args) {
 
 checkCorrPlotType <- function(args) {
   corrPlotTypes <- c("Empty", "Circles", "Text", "AbsText")
-  if (is.na(match(args$corrPlotType, corrPlotTypes))) {
+  if (is.null(args$corrPlotType) || is.na(match(args$corrPlotType, corrPlotTypes))) {
     message(paste(
       "corrPlotType:",
       args$corrPlotType,
@@ -448,8 +550,8 @@ checkCorrPlotType <- function(args) {
 checkCorrPlotCS <- function(args) {
   continuousCSList <- c(
     "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-    "Blues", "Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
-    "PuBuGn", "PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
+    "Blues", "Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu",
+    "OrRd", "PuBuGn", "PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
   )
   if (!is.null(args$corrPlotCS) && is.na(match(args$corrPlotCS, continuousCSList))) {
     message(paste(
@@ -493,14 +595,14 @@ checkColumnLabels <- function(args) {
   }
   return(args)
 }
-  
+
 checkContinuousCS <- function(args) {
   continuousCSList <- c(
     "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-    "Blues", "Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
-    "PuBuGn", "PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
+    "Blues", "Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu",
+    "OrRd", "PuBuGn", "PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd"
   )
-  if (is.na(match(args$continuousCS, continuousCSList))) {
+  if (is.null(args$continuousCS) || is.na(match(args$continuousCS, continuousCSList))) {
     message(paste(
       "continuousCS:",
       args$continuousCS,
@@ -514,7 +616,7 @@ checkContinuousCS <- function(args) {
 
 checkCategoricalCS <- function(args) {
   categoricalCSList <- c("Category10", "Accent", "Dark2", "Paired", "Set1")
-  if (is.na(match(args$categoricalCS, categoricalCSList))) {
+  if (is.null(args$categoricalCS) || is.na(match(args$categoricalCS, categoricalCSList))) {
     message(paste(
       "categoricalCS:",
       args$categoricalCS,
@@ -525,7 +627,21 @@ checkCategoricalCS <- function(args) {
   }
   return(args)
 }
-  
+
+checkMouseMode <- function(args) {
+  mouseModeList <- c("tooltip", "filter", "zoom")
+  if (is.null(args$mouseMode) || is.na(match(args$mouseMode, mouseModeList))) {
+    message(paste(
+      "mouseMode:",
+      args$mouseMode,
+      "must be a valid mouse mode, it must be one of:",
+      toString(mouseModeList)
+    ))
+    args$mouseMode <- "tooltip"
+  }
+  return(args)
+}
+
 checkScatterPlotProperties <- function(args) {
   if (!is.null(args$plotProperties) && !is.list(args$plotProperties)) {
     message("'plotProperties' must be a list")
@@ -535,8 +651,12 @@ checkScatterPlotProperties <- function(args) {
     validKeys <- c("noCatColor", "watermarkColor", "point", "regression")
     unknownKeys <- setdiff(names(args$plotProperties), validKeys)
     if (length(unknownKeys) != 0) {
-      message(paste0("plotProperties constains invalid properties: ", toString(unknownKeys),
-        ". Valid properties are:", toString(validKeys)))
+      message(
+        paste0(
+          "plotProperties constains invalid properties: ", toString(unknownKeys),
+          ". Valid properties are:", toString(validKeys)
+        )
+      )
       args["plotProperties"] <- list(NULL)
     }
   }
@@ -552,8 +672,12 @@ checkSlidersPosition <- function(args) {
     validKeys <- c("dimCount", "xStartingDimIndex", "yStartingDimIndex")
     unknownKeys <- setdiff(names(args$slidersPosition), validKeys)
     if (length(unknownKeys) != 0) {
-      message(paste0("slidersPosition constains invalid properties: ", toString(unknownKeys),
-        ". Valid properties are:", toString(validKeys)))
+      message(
+        paste0(
+          "slidersPosition constains invalid properties: ", toString(unknownKeys),
+          ". Valid properties are:", toString(validKeys)
+        )
+      )
       args["slidersPosition"] <- list(NULL)
     }
   }
@@ -568,17 +692,20 @@ checkEventInputId <- function(args) {
   return(args)
 }
 
+#' Distribution plots
+#'
 #' Tells which type of representation to use for distribution plots.
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param distribType
-#'   Binary code indicating the type of distribution plot (bit 1: histogram, bit 2: density plot).
+#'   Binary code indicating the type of distribution plot
+#'   (bit 1: histogram, bit 2: density plot).
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -611,6 +738,8 @@ setDistribType <- function(id, distribType) {
   callJS()
 }
 
+#' Regression plots
+#'
 #' Tells which type of regression to use for regression plots.
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
@@ -621,7 +750,7 @@ setDistribType <- function(id, distribType) {
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -652,17 +781,19 @@ setRegressionType <- function(id, regressionType) {
   callJS()
 }
 
+#' Correlation plot type
+#'
 #' Tells which type of correlation plot to use.
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param corrPlotType
-#'   One of the available correlation plot types (Empty, Circles, Text, AbsText).
+#'   One of the available correlation plot types (`Empty`, `Circles`, `Text`, `AbsText`).
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -700,19 +831,22 @@ setCorrPlotType <- function(id, corrPlotType) {
   callJS()
 }
 
-#' Tells which color scale to use for correlation plots.
+#' Color scale for correlation plots
+#'
+#' Tells which color scale to use for correlation plots (only used when plot type is `Text` or `AbsText`).
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param corrPlotCsId
 #'   One of the available color scale ids
-#'   ("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-#'    "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
-#'    "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd").
+#'   (`Viridis`, `Inferno`, `Magma`, `Plasma`, `Warm`, `Cool`, `Rainbow`,
+#'    `CubehelixDefault`, `Blues`, `Greens`, `Greys`, `Oranges`, `Purples`,
+#'    `Reds`, `BuGn`, `BuPu`, `GnBu`, `OrRd`, `PuBuGn`, `PuBu`, `PuRd`,
+#'    `RdBu`, `RdPu`, `YlGnBu`, `YlGn`, `YlOrBr`, `YlOrRd`).
 #'
 #' @return No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -755,19 +889,22 @@ setCorrPlotCS <- function(id, corrPlotCsId) {
   callJS()
 }
 
-#' Tells which color scale to use for continuous columns.
+#' Continuous color scale
+#'
+#' Tells which color scale to use when the Z axis is set to a continuous column.
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param continuousCsId
 #'   One of the available color scale ids
-#'   ("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-#'    "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
-#'    "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd").
+#'   (`Viridis`, `Inferno`, `Magma`, `Plasma`, `Warm`, `Cool`, `Rainbow`,
+#'    `CubehelixDefault`, `Blues`, `Greens`, `Greys`, `Oranges`, `Purples`,
+#'    `Reds`, `BuGn`, `BuPu`, `GnBu`, `OrRd`, `PuBuGn`, `PuBu`, `PuRd`,
+#'    `RdBu`, `RdPu`, `YlGnBu`, `YlGn`, `YlOrBr`, `YlOrRd`).
 #'
 #' @return No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -787,7 +924,7 @@ setCorrPlotCS <- function(id, corrPlotCsId) {
 #'        ),
 #'        selected = "Viridis"
 #'      ),
-#'      p("The selector controls the colors used when reference column is of type continuous"),
+#'      p("Selector controls used colors when reference column is of type continuous"),
 #'      scatterPlotMatrixOutput("spMatrix")
 #'    )
 #'
@@ -809,7 +946,9 @@ setContinuousColorScale <- function(id, continuousCsId) {
   callJS()
 }
 
-#' Tells which color scale to use for categorical columns.
+#' Categorical color scale
+#'
+#' Tells which color scale to use when the Z axis is set to a categorical column.
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param categoricalCsId
@@ -819,7 +958,7 @@ setContinuousColorScale <- function(id, continuousCsId) {
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -833,7 +972,7 @@ setContinuousColorScale <- function(id, continuousCsId) {
 #'        ),
 #'        selected = "Category10"
 #'      ),
-#'      p("The selector controls the colors used when reference column is of type categorical"),
+#'      p("Selector controls used colors when reference column is of type categorical"),
 #'      scatterPlotMatrixOutput("spMatrix")
 #'    )
 #'
@@ -858,23 +997,23 @@ setCategoricalColorScale <- function(id, categoricalCsId) {
 #' Cutoffs values
 #'
 #' Tells which cutoffs to use for each pair of columns.
-#'
 #' It's possible to filter some points by defining cutoffs to apply to columns.
 #'
 #' @param id
 #'   output variable to read from (id which references the requested plot)
 #' @param cutoffs
-#'   List of 'SpCutoff'; a 'SpCutoff' is a list defining a 'xDim', 'yDim' and a list of 'xyCutoff';
-#'   a 'xyCutoff' is a pair of 'cutoff' (one for x axis, one for y axis);
-#'   a 'cutoff' is a list containing two values (min and max values)
-#'   or \code{NULL} if there is no cutoff to apply for this axis;
-#'   \code{NULL} is allowed, meaning there is no cutoff to apply.
+#'   List of `SpCutoff`;
+#'   a `SpCutoff` is a list defining a `xDim`, `yDim` and a list of `xyCutoff`;
+#'   a `xyCutoff` is a pair of `cutoff` (one for x axis, one for y axis);
+#'   a `cutoff` is a list containing two values (min and max values)
+#'   or `NULL` if there is no cutoff to apply for this axis;
+#'   `NULL` is allowed, meaning there is no cutoff to apply.
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -913,6 +1052,53 @@ setCutoffs <- function(id, cutoffs) {
   callJS()
 }
 
+#' Row highlight
+#'
+#' Asks to change the highlighted row.
+#'
+#' @param id
+#'   output variable to read from (id which references the requested plot)
+#' @param pointIndex
+#'   index of the point to highlight; `NULL` means no point is to highlight.
+#'
+#' @return
+#'   No return value, called from shiny applications for side effects.
+#'
+#' @examples
+#'  if(interactive() && require(shiny)) {
+#'    library(shiny)
+#'    library(scatterPlotMatrix)
+#'
+#'    ui <- fluidPage(
+#'      actionButton("highlightPointAction", "Highlight Last Point"),
+#'      actionButton("clearHlPointAction", "Remove Highlighting"),
+#'      p("These buttons sets/unsets a selected line"),
+#'      scatterPlotMatrixOutput("spMatrix")
+#'    )
+#'
+#'    server <- function(input, output, session) {
+#'      output$spMatrix <- renderScatterPlotMatrix({
+#'        scatterPlotMatrix(iris)
+#'      })
+#'      observeEvent(input$highlightPointAction, {
+#'        lastRowIndex <- nrow(iris)
+#'        scatterPlotMatrix::highlightPoint("spMatrix", lastRowIndex)
+#'      })
+#'
+#'      observeEvent(input$clearHlPointAction, {
+#'        scatterPlotMatrix::highlightPoint("spMatrix", NULL)
+#'      })
+#'    }
+#'
+#'    shinyApp(ui, server)
+#'  }
+#'
+#' @export
+highlightPoint <- function(id, pointIndex) {
+  method <- "highlightPoint" # nolint
+  callJS()
+}
+
 #' Column visibility
 #'
 #' Tells which columns have to be visible.
@@ -920,14 +1106,15 @@ setCutoffs <- function(id, cutoffs) {
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param keptColumns
-#'   Vector of boolean (one for each data column), \code{FALSE} if column has to be hidden.
-#'   A named list can also be provided to only indicate which columns must be assigned to a new visibility.
+#'   Vector of boolean (one for each data column), `FALSE` if column has to be hidden.
+#'   A named list can also be provided to only indicate which columns must be assigned
+#'   to a new visibility.
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -962,8 +1149,9 @@ setKeptColumns <- function(id, keptColumns) {
   callJS()
 }
 
-#' This function allows to set the type of interaction;
-#' three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').
+#' Set mouse interaction type
+#'
+#' Three types of mouse interactions are available (`tooltip`, `filter` or `zoom`).
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param interactionType
@@ -973,7 +1161,7 @@ setKeptColumns <- function(id, keptColumns) {
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -983,7 +1171,7 @@ setKeptColumns <- function(id, keptColumns) {
 #'        "Mouse Interactions:",
 #'        c("Tooltip" = "tooltip", "Filter" = "filter", "Zoom" = "zoom")
 #'      ),
-#'      p("The selector controls the type of mouse interactions with the scatterPlotMatrix"),
+#'      p("Selector controls type of mouse interactions with the scatterPlotMatrix"),
 #'      scatterPlotMatrixOutput("spMatrix")
 #'    )
 #'
@@ -1005,17 +1193,20 @@ changeMouseMode <- function(id, interactionType) {
   callJS()
 }
 
-#' Tells which dim is to display on Z axis.
+#' Z axis
+#'
+#' Tells which column to use as reference to determine color of each points.
+#'
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param dim
-#'   Is to display on X axis.
+#'   name of the column to use as reference.
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
 #'
 #' @examples
-#'  if(interactive()) {
+#'  if(interactive() && require(shiny)) {
 #'    library(shiny)
 #'    library(scatterPlotMatrix)
 #'
@@ -1039,7 +1230,10 @@ changeMouseMode <- function(id, interactionType) {
 #'      })
 #'
 #'      observe({
-#'        scatterPlotMatrix::setZAxis("spMatrix", if (input$zAxisUsedCB) input$zAxisSelect else NULL)
+#'        scatterPlotMatrix::setZAxis(
+#'          "spMatrix",
+#'          if (input$zAxisUsedCB) input$zAxisSelect else NULL
+#'        )
 #'      })
 #'    }
 #'
@@ -1052,8 +1246,9 @@ setZAxis <- function(id, dim) {
   callJS()
 }
 
-#' Asks to retrieve the plot configuration.
-#' Result will be sent through a reactive input.
+#' Retrieve plot configuration
+#'
+#' Result will be sent through a reactive input (see example below).
 #' @param id
 #'   Output variable to read from (id which references the requested plot).
 #' @param configInputId
@@ -1061,6 +1256,66 @@ setZAxis <- function(id, dim) {
 #'
 #' @return
 #'   No return value, called from shiny applications for side effects.
+#'
+#' @examples
+#' \dontrun{
+#'    library(shiny)
+#'    library(shinyjs)
+#'    library(scatterPlotMatrix)
+#'
+#'    ui <- fluidPage(
+#'      useShinyjs(),
+#'      p("Button saves the widget as an html file, reproducing its configuration"),
+#'      actionButton("downloadButton", "Download Widget"),
+#'      downloadButton("associatedDownloadButton", "Download Widget",
+#'        style = "visibility: hidden;"
+#'      ),
+#'      scatterPlotMatrixOutput("spMatrix", height = 960)
+#'    )
+#'
+#'    server <- function(input, output, session) {
+#'      output$spMatrix <- renderScatterPlotMatrix({
+#'        scatterPlotMatrix(iris)
+#'      })
+#'      observeEvent(input$downloadButton, {
+#'        scatterPlotMatrix::getPlotConfig("spMatrix", "ConfigForDownload")
+#'      })
+#'      observeEvent(input$ConfigForDownload, {
+#'        spmForDownload <<- scatterPlotMatrix(
+#'          data = iris,
+#'          categorical = input$ConfigForDownload$categorical,
+#'          inputColumns = input$ConfigForDownload$inputColumns,
+#'          cutoffs = input$ConfigForDownload$cutoffs,
+#'          keptColumns = input$ConfigForDownload$keptColumns,
+#'          zAxisDim = input$ConfigForDownload$zAxisDim,
+#'          distribType = as.numeric(input$ConfigForDownload$distribType),
+#'          regressionType = as.numeric(input$ConfigForDownload$regressionType),
+#'          corrPlotType = input$ConfigForDownload$corrPlotType,
+#'          corrPlotCS = input$ConfigForDownload$corrPlotCS,
+#'          rotateTitle = input$ConfigForDownload$rotateTitle,
+#'          columnLabels = input$ConfigForDownload$columnLabels,
+#'          continuousCS = input$ConfigForDownload$continuousCS,
+#'          categoricalCS = input$ConfigForDownload$categoricalCS,
+#'          mouseMode = input$ConfigForDownload$mouseMode,
+#'          controlWidgets = NULL,
+#'          cssRules = input$ConfigForDownload$cssRules,
+#'          plotProperties = input$ConfigForDownload$plotProperties,
+#'          slidersPosition = input$ConfigForDownload$slidersPosition
+#'        )
+#'        shinyjs::runjs("document.getElementById('associatedDownloadButton').click();")
+#'      })
+#'      output$associatedDownloadButton <- downloadHandler(
+#'        filename = function() {
+#'          paste("scatterPlotMatrix-", Sys.Date(), ".html", sep = "")
+#'        },
+#'        content = function(tmpContentFile) {
+#'          htmlwidgets::saveWidget(spmForDownload, tmpContentFile)
+#'        }
+#'      )
+#'    }
+#'
+#'    shinyApp(ui, server)
+#'  }
 #'
 #' @export
 getPlotConfig <- function(id, configInputId) {

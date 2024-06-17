@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setContinuousColorScale}
 \alias{setContinuousColorScale}
-\title{Tells which color scale to use for continuous columns.}
+\title{Continuous color scale}
 \usage{
 setContinuousColorScale(id, continuousCsId)
 }
@@ -10,18 +10,19 @@ setContinuousColorScale(id, continuousCsId)
 \item{id}{Output variable to read from (id which references the requested plot).}
 
 \item{continuousCsId}{One of the available color scale ids
-("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
- "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
- "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd").}
+(\code{Viridis}, \code{Inferno}, \code{Magma}, \code{Plasma}, \code{Warm}, \code{Cool}, \code{Rainbow},
+\code{CubehelixDefault}, \code{Blues}, \code{Greens}, \code{Greys}, \code{Oranges}, \code{Purples},
+\code{Reds}, \code{BuGn}, \code{BuPu}, \code{GnBu}, \code{OrRd}, \code{PuBuGn}, \code{PuBu}, \code{PuRd},
+\code{RdBu}, \code{RdPu}, \code{YlGnBu}, \code{YlGn}, \code{YlOrBr}, \code{YlOrRd}).}
 }
 \value{
 No return value, called from shiny applications for side effects.
 }
 \description{
-Tells which color scale to use for continuous columns.
+Tells which color scale to use when the Z axis is set to a continuous column.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 
@@ -41,7 +42,7 @@ Tells which color scale to use for continuous columns.
        ),
        selected = "Viridis"
      ),
-     p("The selector controls the colors used when reference column is of type continuous"),
+     p("Selector controls used colors when reference column is of type continuous"),
      scatterPlotMatrixOutput("spMatrix")
    )
 

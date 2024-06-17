@@ -10,7 +10,8 @@ setKeptColumns(id, keptColumns)
 \item{id}{Output variable to read from (id which references the requested plot).}
 
 \item{keptColumns}{Vector of boolean (one for each data column), \code{FALSE} if column has to be hidden.
-A named list can also be provided to only indicate which columns must be assigned to a new visibility.}
+A named list can also be provided to only indicate which columns must be assigned
+to a new visibility.}
 }
 \value{
 No return value, called from shiny applications for side effects.
@@ -19,7 +20,7 @@ No return value, called from shiny applications for side effects.
 Tells which columns have to be visible.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 

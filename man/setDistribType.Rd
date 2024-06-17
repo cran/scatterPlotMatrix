@@ -2,14 +2,15 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setDistribType}
 \alias{setDistribType}
-\title{Tells which type of representation to use for distribution plots.}
+\title{Distribution plots}
 \usage{
 setDistribType(id, distribType)
 }
 \arguments{
 \item{id}{Output variable to read from (id which references the requested plot).}
 
-\item{distribType}{Binary code indicating the type of distribution plot (bit 1: histogram, bit 2: density plot).}
+\item{distribType}{Binary code indicating the type of distribution plot
+(bit 1: histogram, bit 2: density plot).}
 }
 \value{
 No return value, called from shiny applications for side effects.
@@ -18,7 +19,7 @@ No return value, called from shiny applications for side effects.
 Tells which type of representation to use for distribution plots.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 

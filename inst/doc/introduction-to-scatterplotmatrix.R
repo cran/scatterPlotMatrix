@@ -1,4 +1,4 @@
-## ---- include = FALSE---------------------------------------------------------
+## ----include = FALSE----------------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -41,7 +41,7 @@ scatterPlotMatrix(iris, corrPlotType = "AbsText")
 scatterPlotMatrix(mtcars)
 
 ## -----------------------------------------------------------------------------
-categorical <- list(NULL, c(4, 6, 8), NULL, NULL, NULL, NULL, NULL, c(0, 1), c(0, 1), 3:5, 1:8)
+categorical <- list(cyl = c(4, 6, 8), vs = c(0, 1), am = c(0, 1), gear = 3:5, carb = 1:8)
 scatterPlotMatrix(mtcars, categorical = categorical, zAxisDim = "cyl")
 
 ## -----------------------------------------------------------------------------
@@ -57,8 +57,9 @@ cutoffs <- list(
     yDim = "Species",
     xyCutoffs = list(
       list(c(4, 8), c(-0.1, 0.1)),
-      list(c(4, 8), c(1.9, 2.1)))
+      list(c(4, 8), c(1.9, 2.1))
     )
+  )
 )
 scatterPlotMatrix(iris, zAxisDim = "Species", cutoffs = cutoffs)
 
@@ -71,8 +72,8 @@ scatterPlotMatrix(iris, zAxisDim = "Species", columnLabels = columnLabels)
 
 ## -----------------------------------------------------------------------------
 scatterPlotMatrix(iris, cssRules = list(
-    ".jitterZone" = "fill: pink", # Set background of plot to pink
-    ".tick text" = c("fill: red", "font-size: 1.8em") # Set text of axes ticks red and greater
+  ".jitterZone" = "fill: pink", # Set background of plot to pink
+  ".tick text" = c("fill: red", "font-size: 1.8em") # Set text of axes ticks red and greater
 ))
 
 ## -----------------------------------------------------------------------------
@@ -85,5 +86,5 @@ scatterPlotMatrix(iris, plotProperties = list(
 ))
 
 ## -----------------------------------------------------------------------------
-scatterPlotMatrix(iris, controlWidgets = TRUE)
+scatterPlotMatrix(iris, controlWidgets = TRUE, width = 770, height = 770)
 

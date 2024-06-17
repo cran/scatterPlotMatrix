@@ -9,9 +9,10 @@ setCutoffs(id, cutoffs)
 \arguments{
 \item{id}{output variable to read from (id which references the requested plot)}
 
-\item{cutoffs}{List of 'SpCutoff'; a 'SpCutoff' is a list defining a 'xDim', 'yDim' and a list of 'xyCutoff';
-a 'xyCutoff' is a pair of 'cutoff' (one for x axis, one for y axis);
-a 'cutoff' is a list containing two values (min and max values)
+\item{cutoffs}{List of \code{SpCutoff};
+a \code{SpCutoff} is a list defining a \code{xDim}, \code{yDim} and a list of \code{xyCutoff};
+a \code{xyCutoff} is a pair of \code{cutoff} (one for x axis, one for y axis);
+a \code{cutoff} is a list containing two values (min and max values)
 or \code{NULL} if there is no cutoff to apply for this axis;
 \code{NULL} is allowed, meaning there is no cutoff to apply.}
 }
@@ -20,12 +21,10 @@ No return value, called from shiny applications for side effects.
 }
 \description{
 Tells which cutoffs to use for each pair of columns.
-}
-\details{
 It's possible to filter some points by defining cutoffs to apply to columns.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 

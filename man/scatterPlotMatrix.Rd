@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{scatterPlotMatrix}
 \alias{scatterPlotMatrix}
-\title{htmlwidget for d3.js scatter plot matrix}
+\title{\code{htmlwidget} for \code{d3.js} scatter plot matrix}
 \usage{
 scatterPlotMatrix(
   data,
@@ -19,6 +19,7 @@ scatterPlotMatrix(
   columnLabels = NULL,
   continuousCS = "Viridis",
   categoricalCS = "Category10",
+  mouseMode = "tooltip",
   eventInputId = NULL,
   controlWidgets = FALSE,
   cssRules = NULL,
@@ -30,80 +31,115 @@ scatterPlotMatrix(
 )
 }
 \arguments{
-\item{data}{data.frame with data to use in the chart.}
+\item{data}{\code{data.frame} with data to use in the chart.}
 
 \item{categorical}{List of list (one for each data column) containing the name of available categories,
 or \code{NULL} if column corresponds to continuous data;
-\code{NULL} is allowed, meaning all columns are continuous.}
+\code{NULL} is allowed, meaning all columns are continuous.
+A named list can also be provided to only indicate which columns are categorical,
+associating available categories to a column name.}
 
-\item{inputColumns}{List of boolean (one for each data column), \code{TRUE} for an input column, \code{FALSE} for an output column;
-\code{NULL} is allowed, meaning all columns are inputs.}
+\item{inputColumns}{List of boolean (one for each data column),
+\code{TRUE} for an input column, \code{FALSE} for an output column;
+\code{NULL} is allowed, meaning all columns are inputs.
+A list of column names can also be provided to only indicate which columns are inputs.}
 
-\item{cutoffs}{List of 'SpCutoff'; a 'SpCutoff' is a list defining a 'xDim', 'yDim' and a list of 'xyCutoff';
-a 'xyCutoff' is a pair of 'cutoff' (one for x axis, one for y axis);
-a 'cutoff' is a list containing two values (min and max values)
+\item{cutoffs}{List of \code{SpCutoff};
+a \code{SpCutoff} is a list defining a \code{xDim}, \code{yDim} and a list of \code{xyCutoff};
+a \code{xyCutoff} is a pair of \code{cutoff} (one for x axis, one for y axis);
+a \code{cutoff} is a list containing two values (min and max values)
 or \code{NULL} if there is no cutoff to apply for this axis;
 \code{NULL} is allowed, meaning there is no cutoff to apply.}
 
 \item{keptColumns}{List of boolean (one for each data column), \code{FALSE} if column has to be ignored;
-\code{NULL} is allowed, meaning all columns are available.}
+\code{NULL} is allowed, meaning all columns are available.
+A list of column names can also be provided to only indicate
+which columns are to be kept.}
 
-\item{zAxisDim}{Name of the column represented by z axis (used to determine the color to attribute to a point);
+\item{zAxisDim}{Name of the column represented by z axis
+(used to determine the color to attribute to a point);
 \code{NULL} is allowed, meaning there is no coloring to apply.}
 
-\item{distribType}{Binary code indicating the type of distribution plot (bit 1: density plot, bit 2: histogram).}
+\item{distribType}{Binary code indicating the type of distribution plot
+(bit 1: density plot, bit 2: histogram).}
 
 \item{regressionType}{Binary code indicating the type of regression plot (bit 1: linear, bit 2: loess).}
 
 \item{corrPlotType}{String indicating the type of correlation plots to use.
-Supported values: \code{Circles} to use a circle tree map;
-\code{Text} to display values of correlation as colored text labels (color scale domain is [-1; 1]);
-\code{AbsText} to display values of correlation as colored text labels (color scale domain is [0; 1],
-absolute value of correlations is used);
-\code{Empty} to not display values of correlation;
-default value is \code{Circles}.}
+Supported values:
+\itemize{
+\item \code{Circles} to use a circle tree map;
+\item \code{Text} to display values of correlation as colored text labels
+(color scale domain is \verb{[-1; 1]});
+\item \code{AbsText} to display values of correlation as colored text labels
+(color scale domain is \verb{[0; 1]}, absolute value of correlations is used);
+\item \code{Empty} to not display values of correlation;
+default value is \code{Circles}.
+}}
 
-\item{corrPlotCS}{Name of the color Scale to use for correlation plot when plot type is 'Text' or 'AbsText';
-supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
-"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
-default value is \code{NULL},
-which corresponds to "RdBu" if corrPlotType is \code{Text},
-or "Blues" if corrPlotType is \code{AbsText}.}
+\item{corrPlotCS}{Name of the color Scale to use for correlation plot
+when plot type is \code{Text} or \code{AbsText};
+supported names: \code{Viridis}, \code{Inferno}, \code{Magma}, \code{Plasma}, \code{Warm}, \code{Cool}, \code{Rainbow},
+\code{CubehelixDefault}, \code{Blues},\code{Greens}, \code{Greys}, \code{Oranges}, \code{Purples}, \code{Reds}, \code{BuGn},
+\code{BuPu}, \code{GnBu}, \code{OrRd}, \code{PuBuGn}, \code{PuBu}, \code{PuRd}, \code{RdBu}, \code{RdPu}, \code{YlGnBu}, \code{YlGn},
+\code{YlOrBr}, \code{YlOrRd};
+default value is \code{NULL}, which corresponds to \code{RdBu} if \code{corrPlotType} is \code{Text},
+or \code{Blues} if \code{corrPlotType} is \code{AbsText}.}
 
 \item{rotateTitle}{\code{TRUE} if column title must be rotated.}
 
-\item{columnLabels}{List of string (one for each data column) to display in place of column name found in data,
+\item{columnLabels}{List of string (one for each data column) to display
+in place of column name found in data,
 or \code{NULL} if there is no alternative name;
 \code{NULL} is allowed, meaning all columns are without alternative name;
-\code{<br>} can be used to insert line breaks.}
+\verb{<br>} can be used to insert line breaks.}
 
 \item{continuousCS}{Name of the color Scale to use for continuous data;
-supported names: "Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
-"Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd", "PuBuGn","PuBu",
-"PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd";
+supported names: \code{Viridis}, \code{Inferno}, \code{Magma}, \code{Plasma}, \code{Warm}, \code{Cool}, \code{Rainbow},
+\code{CubehelixDefault}, \code{Blues}, \code{Greens}, \code{Greys}, \code{Oranges}, \code{Purples}, \code{Reds}, \code{BuGn},
+\code{BuPu}, \code{GnBu}, \code{OrRd}, \code{PuBuGn}, \code{PuBu}, \code{PuRd}, \code{RdBu}, \code{RdPu}, \code{YlGnBu}, \code{YlGn},
+\code{YlOrBr}, \code{YlOrRd};
 default value is \code{Viridis}.}
 
 \item{categoricalCS}{Name of the color Scale to use for categorical data;
-supported names: Category10, Accent, Dark2, Paired, Set1;
+supported names: \code{Category10}, \code{Accent}, \code{Dark2}, \code{Paired}, \code{Set1};
 default value is \code{Category10}.}
 
-\item{eventInputId}{When plot event occured, reactive input to write to; \code{NULL} is allowed, default value is 'plotEvent'.
+\item{mouseMode}{Type of mouse interaction. Three types are available: \code{tooltip}, \code{filter} or \code{zoom}.}
+
+\item{eventInputId}{When plot event occurred, reactive input to write to;
+\code{NULL} is allowed, meaning no event is sent.
 An event is a list with two named elements 'type' and 'value'.
-If 'type' is 'zAxisChange', it means the coloration of points has changed,
-(probably because an header of column has been clicked), and 'value' is a name of column (or NULL).}
+\itemize{
+\item If \code{type} is equal to \code{zAxisChange}:
+\itemize{
+\item \code{value} is the new column to use as reference (see \code{zAxisDim} argument).
+}
+\item If \code{type} is equal to \code{cutoffChange}:
+\itemize{
+\item \code{value$adjusting} is \code{TRUE} when pointer is moving, changing a cutoff;
+\item \code{value$cutoffs} gives the new values for the cutoffs.
+}
+\item If \code{type} is equal to \code{pointClicked}:
+\itemize{
+\item \code{value$pointIndex} is the index of the clicked point.
+}
+}}
 
 \item{controlWidgets}{Tells if some widgets must be available to control plot;
-\code{NULL} is allowed, meaning that '!HTMLWidgets.shinyMode' is to use;
+\code{NULL} is allowed, meaning that \code{!HTMLWidgets.shinyMode} is to use;
 default value is \code{FALSE}.}
 
 \item{cssRules}{CSS rules to add.
 Must be a named list of the form list(selector = declarations),
-where selector is a valid CSS selector and declarations is a string or vector of declarations.}
+where selector is a valid CSS selector and declarations is
+a string or vector of declarations.}
 
-\item{plotProperties}{Adjust some properties which can not be set through CSS (mainly size, color and opacity of points).
+\item{plotProperties}{Adjust some properties which can not be set through CSS
+(mainly size, color and opacity of points).
 Default value is \code{NULL} which is equivalent to:
-  list(
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{  list(
     noCatColor = "#43665e",
     watermarkColor = "#ddd",
     point = list(
@@ -113,15 +149,18 @@ Default value is \code{NULL} which is equivalent to:
     regression = list(
       strokeWidth = 4
     )
-  )}
+  )
+}\if{html}{\out{</div>}}}
 
 \item{slidersPosition}{Set initial position of sliders, specifying which columns intervals are visible.
 Default value is \code{NULL} which is equivalent to:
-  list(
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{  list(
     dimCount = 8,
     xStartingDimIndex = 1,
     yStartingDimIndex = 1
-  )}
+  )
+}\if{html}{\out{</div>}}}
 
 \item{width}{Integer in pixels defining the width of the widget.}
 
@@ -130,7 +169,7 @@ Default value is \code{NULL} which is equivalent to:
 \item{elementId}{Unique \code{CSS} selector id for the widget.}
 }
 \description{
-htmlwidget for d3.js scatter plot matrix
+\code{htmlwidget} for \code{d3.js} scatter plot matrix
 }
 \examples{
  if(interactive()) {
@@ -139,9 +178,10 @@ htmlwidget for d3.js scatter plot matrix
    scatterPlotMatrix(iris, zAxisDim = "Species")
    # Each point has a color depending of its 'Species' value
 
-   categorical <- list(NULL, c(4, 6, 8), NULL, NULL, NULL, NULL, NULL, c(0, 1), c(0, 1), 3:5, 1:8)
+   categorical <-
+     list(cyl = c(4, 6, 8), vs = c(0, 1), am = c(0, 1), gear = 3:5, carb = 1:8)
    scatterPlotMatrix(mtcars, categorical = categorical, zAxisDim = "cyl")
-   # 'cyl' and four last columns have a box representation for its categories
+   # 'cyl' and four last columns have a box representation for categories
    # (use top slider to see the last three columns)
 
    scatterPlotMatrix(iris, zAxisDim = "Species", distribType = 1)
@@ -152,7 +192,8 @@ htmlwidget for d3.js scatter plot matrix
 
    columnLabels <- gsub("\\\\.", "<br>", colnames(iris))
    scatterPlotMatrix(iris, zAxisDim = "Species", columnLabels = columnLabels)
-   # Given names are displayed in place of dataset column names; <br> is used to insert line breaks
+   # Given names are displayed in place of dataset column names;
+   # <br> is used to insert line breaks
 
    scatterPlotMatrix(iris, cssRules = list(
        ".jitterZone" = "fill: pink",
@@ -168,7 +209,7 @@ htmlwidget for d3.js scatter plot matrix
      )
    ))
    # Points of plots are different:
-   # two times greater, with opacity reduced from 0.5 to 0.3, and a 'DarkCyan' color
+   # two times greater, with opacity reduced from 0.5 to 0.3, and a `DarkCyan` color
 
  }
 

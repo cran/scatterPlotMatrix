@@ -2,23 +2,23 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setZAxis}
 \alias{setZAxis}
-\title{Tells which dim is to display on Z axis.}
+\title{Z axis}
 \usage{
 setZAxis(id, dim)
 }
 \arguments{
 \item{id}{Output variable to read from (id which references the requested plot).}
 
-\item{dim}{Is to display on X axis.}
+\item{dim}{name of the column to use as reference.}
 }
 \value{
 No return value, called from shiny applications for side effects.
 }
 \description{
-Tells which dim is to display on Z axis.
+Tells which column to use as reference to determine color of each points.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 
@@ -42,7 +42,10 @@ Tells which dim is to display on Z axis.
      })
 
      observe({
-       scatterPlotMatrix::setZAxis("spMatrix", if (input$zAxisUsedCB) input$zAxisSelect else NULL)
+       scatterPlotMatrix::setZAxis(
+         "spMatrix",
+         if (input$zAxisUsedCB) input$zAxisSelect else NULL
+       )
      })
    }
 

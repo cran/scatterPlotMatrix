@@ -4,6 +4,8 @@
   -webkit-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  display: block;
+  margin: auto;
 }
 
 .mspDiv {
@@ -271,8 +273,7 @@
 .mspDiv .axisGroup line,
 .mspDiv .axisGroup path {
     fill: none;
-    shape-rendering: crispEdges;
-    stroke: black;
+    stroke: none;
 }
 
 .mspDiv .axisGroup text {
@@ -281,7 +282,13 @@
 }
 
 .mspDiv .brushDim .overlay {
-  cursor : pointer
+  cursor : pointer;
+  stroke: black;
+}
+
+.mspDiv .brushDim .selection {
+  fill: black;
+  stroke: none
 }
 
 .mspDiv .chainGroup path {

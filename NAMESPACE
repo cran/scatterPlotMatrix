@@ -2,6 +2,7 @@
 
 export(changeMouseMode)
 export(getPlotConfig)
+export(highlightPoint)
 export(renderScatterPlotMatrix)
 export(scatterPlotMatrix)
 export(scatterPlotMatrixOutput)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setCorrPlotCS}
 \alias{setCorrPlotCS}
-\title{Tells which color scale to use for correlation plots.}
+\title{Color scale for correlation plots}
 \usage{
 setCorrPlotCS(id, corrPlotCsId)
 }
@@ -10,18 +10,19 @@ setCorrPlotCS(id, corrPlotCsId)
 \item{id}{Output variable to read from (id which references the requested plot).}
 
 \item{corrPlotCsId}{One of the available color scale ids
-("Viridis", "Inferno", "Magma", "Plasma", "Warm", "Cool", "Rainbow", "CubehelixDefault",
- "Blues","Greens", "Greys", "Oranges", "Purples", "Reds", "BuGn", "BuPu", "GnBu", "OrRd",
- "PuBuGn","PuBu", "PuRd", "RdBu", "RdPu", "YlGnBu", "YlGn", "YlOrBr", "YlOrRd").}
+(\code{Viridis}, \code{Inferno}, \code{Magma}, \code{Plasma}, \code{Warm}, \code{Cool}, \code{Rainbow},
+\code{CubehelixDefault}, \code{Blues}, \code{Greens}, \code{Greys}, \code{Oranges}, \code{Purples},
+\code{Reds}, \code{BuGn}, \code{BuPu}, \code{GnBu}, \code{OrRd}, \code{PuBuGn}, \code{PuBu}, \code{PuRd},
+\code{RdBu}, \code{RdPu}, \code{YlGnBu}, \code{YlGn}, \code{YlOrBr}, \code{YlOrRd}).}
 }
 \value{
 No return value, called from shiny applications for side effects.
 }
 \description{
-Tells which color scale to use for correlation plots.
+Tells which color scale to use for correlation plots (only used when plot type is \code{Text} or \code{AbsText}).
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 

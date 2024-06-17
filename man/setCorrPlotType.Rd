@@ -2,14 +2,14 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setCorrPlotType}
 \alias{setCorrPlotType}
-\title{Tells which type of correlation plot to use.}
+\title{Correlation plot type}
 \usage{
 setCorrPlotType(id, corrPlotType)
 }
 \arguments{
 \item{id}{Output variable to read from (id which references the requested plot).}
 
-\item{corrPlotType}{One of the available correlation plot types (Empty, Circles, Text, AbsText).}
+\item{corrPlotType}{One of the available correlation plot types (\code{Empty}, \code{Circles}, \code{Text}, \code{AbsText}).}
 }
 \value{
 No return value, called from shiny applications for side effects.
@@ -18,7 +18,7 @@ No return value, called from shiny applications for side effects.
 Tells which type of correlation plot to use.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 

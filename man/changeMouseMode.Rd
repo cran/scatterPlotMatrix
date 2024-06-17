@@ -2,8 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{changeMouseMode}
 \alias{changeMouseMode}
-\title{This function allows to set the type of interaction;
-three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').}
+\title{Set mouse interaction type}
 \usage{
 changeMouseMode(id, interactionType)
 }
@@ -16,11 +15,10 @@ changeMouseMode(id, interactionType)
 No return value, called from shiny applications for side effects.
 }
 \description{
-This function allows to set the type of interaction;
-three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').
+Three types of mouse interactions are available (\code{tooltip}, \code{filter} or \code{zoom}).
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 
@@ -30,7 +28,7 @@ three types of mouse interactions are available ('tooltip', 'filter' or 'zoom').
        "Mouse Interactions:",
        c("Tooltip" = "tooltip", "Filter" = "filter", "Zoom" = "zoom")
      ),
-     p("The selector controls the type of mouse interactions with the scatterPlotMatrix"),
+     p("Selector controls type of mouse interactions with the scatterPlotMatrix"),
      scatterPlotMatrixOutput("spMatrix")
    )
 

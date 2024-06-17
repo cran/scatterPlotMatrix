@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatterPlotMatrix.R
 \name{setRegressionType}
 \alias{setRegressionType}
-\title{Tells which type of regression to use for regression plots.}
+\title{Regression plots}
 \usage{
 setRegressionType(id, regressionType)
 }
@@ -18,7 +18,7 @@ No return value, called from shiny applications for side effects.
 Tells which type of regression to use for regression plots.
 }
 \examples{
- if(interactive()) {
+ if(interactive() && require(shiny)) {
    library(shiny)
    library(scatterPlotMatrix)
 
